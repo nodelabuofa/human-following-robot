@@ -13,25 +13,45 @@ class ArucoCornersPub:
     def __init__(self): # constructor
         rospy.init_node('aruco_corners_pub')
 
-        # zed mini subscribers
+        # zed mini subscriber
         self.grayscale_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_gray', Image, self.grayscale_callback) 
         rospy.loginfo("Subscribed to ZED Mini grayscale feed")
 
-        self.bridge = CvBridge() # instantiates CvBridge object, that converts RGB to format digestible by OpenCV
+        # instantiates CvBridge object, that converts RGB to format digestible by OpenCV
+        self.bridge = CvBridge()
+
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50) # specifies I'm using 5x5 Aruco code, ID between 0-50
+        self.aruco_params = cv2.aruco.DetectorParameters_create()
+
 
     def grayscale_callback(self, msg):
         rospy.loginfo("Received an image message")
         rospy.loginfo(f"Image frame id: {msg.header.frame_id}, height: {msg.height}, width: {msg.width}")
 
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8') # openCV likes bgr instead of rgb, and 8 means 
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
             rospy.loginfo(f"Converted image shape: {cv_image.shape}, dtype: {cv_image.dtype}")
 
+            corners, ids, rejected = cv2.aruco.detectMarkers(
+                cv_image, 
+                self.aruco_dict, 
+                parameters=self.aruco_params
+            )
+
+            # Draw detected markers only if any are found
+            if ids is not None and len(ids) > 0:
+                cv2.aruco.drawDetectedMarkers(cv_image, corners, ids)
+                rospy.loginfo("YES: ArUco marker detected")
+            else:
+                rospy.loginfo("NO: No marker detected")
+
+            # Visualize after drawing (or not drawing) the markers
             cv2.imshow("Image", cv_image)
             cv2.waitKey(1)
 
         except Exception as e:
             rospy.logerr(f"Failed to convert image: {e}")
+
     
     def run(self):
         rospy.spin()
