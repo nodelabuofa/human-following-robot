@@ -14,7 +14,7 @@ class ArucoCornersPub:
         rospy.init_node('aruco_corners_pub')
 
         # zed mini subscriber
-        self.grayscale_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_gray', Image, self.grayscale_callback) 
+        self.grayscale_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_color', Image, self.grayscale_callback) 
         rospy.loginfo("Subscribed to ZED Mini grayscale feed")
 
         # instantiates CvBridge object, that converts RGB to format digestible by OpenCV
@@ -22,6 +22,12 @@ class ArucoCornersPub:
 
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50) # specifies I'm using 5x5 Aruco code, ID between 0-50
         self.aruco_params = cv2.aruco.DetectorParameters_create()
+        self.aruco_params.adaptiveThreshWinSizeMin = 3
+        self.aruco_params.adaptiveThreshWinSizeMax = 23
+        self.aruco_params.adaptiveThreshWinSizeStep = 10
+        self.aruco_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+        # Can also adjust errorCorrectionRate, minMarkerPerimeterRate, etc.
+
 
 
     def grayscale_callback(self, msg):
@@ -29,7 +35,7 @@ class ArucoCornersPub:
         rospy.loginfo(f"Image frame id: {msg.header.frame_id}, height: {msg.height}, width: {msg.width}")
 
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             rospy.loginfo(f"Converted image shape: {cv_image.shape}, dtype: {cv_image.dtype}")
 
             corners, ids, rejected = cv2.aruco.detectMarkers(
