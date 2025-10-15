@@ -21,29 +21,63 @@ class UpdatedTwistPub:
 
         rospy.loginfo("Subscribed to aruco-corners-topic")
 
-    def corner_callback(self, msg):
+    def corner_callback(self, aruco_corners_msg):
         try:
-            # The data is a flat list like [x1, y1, d1, x2, y2, d2, ...]
-            data = np.array(msg.data, dtype=np.float32)
+            # data flat list like [x1, y1, d1, x2, y2, d2, ...]
+            data = np.array(aruco_corners_msg.data, dtype=np.float32)
 
             if len(data) < 3:
                 rospy.logwarn(f"Received data length {len(data)} too short to contain even first corner's x,y,d")
                 return
 
-            # Extract first corner's x, y, d
+            # extract first corner's x, y, d
             x1, y1, d1 = data[0], data[1], data[2]
 
-            rospy.loginfo(f"Received first corner - x: {x1:.2f}, y: {y1:.2f}, depth: {d1:.3f}m")
+            rospy.loginfo(f"Received first corner - x: {x1:.0f}, y: {y1:.0f}, depth: {d1:.5f}m")
 
         except Exception as e:
             rospy.logerr(f"Error parsing aruco corners data: {e}")
+
+    
+    def interaction_matrix_callback(self, aruco_corners_msg):
+        f = 5
+        rho_w = 3
+        rho_h = 2
+        data = np.array(aruco_corners)
+        u = x1
+        v = y1
+        Z = d1
+
+        u_bar = 450 - u
+        v_bar = 300 - v
+
+        # 2x6 empty matrix
+        L = np.zeros((2, 6), dtype=np.float32)
+
+        # First row
+        L[0, 0] = -f / (rho_w * Z)
+        L[0, 1] = 0
+        L[0, 2] = u_bar / Z
+        L[0, 3] = (u_bar * v_bar * rho_h) / f
+        L[0, 4] = -f - (u_bar ** 2 * rho_w) / f
+        L[0, 5] = v_bar
+
+        # Second row
+        L[1, 0] = 0
+        L[1, 1] = -f / (rho_h * Z)
+        L[1, 2] = v_bar / Z
+        L[1, 3] = f + (v_bar ** 2 * rho_h) / f
+        L[1, 4] = -(u_bar * v_bar * rho_h) / f
+        L[1, 5] = -u_bar
+
+        return L
 
     def run(self):
         rospy.spin()
 
 if __name__ == '__main__':
     try:
-        node = ArucoCornersSubscriber()
+        node = UpdatedTwistPub()
         node.run()
     except rospy.ROSInterruptException:
         pass
