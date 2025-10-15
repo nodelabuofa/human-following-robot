@@ -14,8 +14,9 @@ class ArucoCornersPub:
         rospy.init_node('aruco_corners_pub')
 
         # zed mini subscriber
-        self.grayscale_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_color', Image, self.grayscale_callback) 
-        rospy.loginfo("Subscribed to ZED Mini grayscale feed")
+        self.RGB_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_color', Image, self.RGB_callback) 
+        rospy.loginfo("Subscribed to ZED Mini RGB feed")
+        self.depth_sub = rospy.Subscriber('/zedm/zed_node/depth/depth_registered', Image, self.depth_callback)
 
         # instantiates CvBridge object, that converts RGB to format digestible by OpenCV
         self.bridge = CvBridge()
@@ -29,11 +30,20 @@ class ArucoCornersPub:
         self.aruco_params.minMarkerDistanceRate = 0.025
         # Can also adjust errorCorrectionRate, minMarkerPerimeterRate, etc.
 
+    def depth_callback(self, msg):
+        try:
+            # convert to OpenCV float32 array (depth in meters)
+            self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1') # 32 bit float, one channel (RGB is 3 high, depth is 1 high)
+        except Exception as e:
+            rospy.logerr(f"Depth image conversion failed: {e}")
 
 
-    def grayscale_callback(self, msg):
+
+    def RGB_callback(self, msg):
         # rospy.loginfo("Received an image message")
         # rospy.loginfo(f"Image frame id: {msg.header.frame_id}, height: {msg.height}, width: {msg.width}")
+        # if self.depth_image is None:
+        #     return # wait until depth frame available
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -47,10 +57,20 @@ class ArucoCornersPub:
 
             for i, corner in enumerate(corners):
                 corner_coordinates = corner.reshape((4, 2))
+
+                depths = [] # just extracts corresponding values from depth_image
+                corner_depths_array = [] # looks like [(x1, y1, d1), ... , (x4, y4, d4)]
+
+                for corner in corner_coordinates:
+                    x, y = int(corner[0]), int(corner[1])
+                    # Check if indices are within depth image bounds
+                    d = float(self.depth_image[y, x])
+                    corner_depths_array.append((x,y,d))
+
                 # flatten (x,y) coordinates to single list [x1, y1, x2, y2, x3, y3, x4, y4]
-                flat_corners = corner_coordinates.flatten()
+                flat_corners = np.array(corner_depths_array).flatten()
                 # format corners to 2 decimal places
-                formatted_corners = ', '.join([f"{pt:.2f}" for pt in flat_corners])
+                formatted_corners = ', '.join([f"{val:.2f}" if isinstance(val, float) else str(val) for val in flat_corners])
                 print(f"Marker ID {ids[i][0]} corners: [{formatted_corners}]")
 
             # Draw detected markers only if any are found
