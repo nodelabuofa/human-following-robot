@@ -81,7 +81,7 @@ class UpdatedTwistPub:
         # rospy.loginfo(f'Pseudo Inverse of Interaction Matrix L:\n{L_inv}')
 
         # control gain
-        lambda_gain = 2
+        lambda_gain = 50
 
         e = np.array([u_bar, v_bar], dtype=np.float32)
 
@@ -95,8 +95,8 @@ class UpdatedTwistPub:
         updated_twist.linear.y = float(v_twist[1])
         updated_twist.linear.z = float(v_twist[2])
         updated_twist.angular.x = float(v_twist[3])
-        updated_twist.angular.y = float(v_twist[4])
-        updated_twist.angular.z = float(v_twist[5])
+        updated_twist.angular.y = float(np.arctan(v_twist[4] * 0.1825 / v_twist[1]))
+        updated_twist.angular.z = float(np.arctan(v_twist[5]))
 
         self.updated_twist_pub.publish(updated_twist)
 
