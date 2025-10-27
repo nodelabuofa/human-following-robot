@@ -18,6 +18,10 @@
 #define TURNING_RADIOUS_MIN 0.35 //calibrated minimum turning radius (for max/min steering angles)
 #define POS_MAX_CORRES_RAD 0.483 //actual steering angle in radius corresponding to the max position limit
 #define POS_MIN_CORRES_RAD -0.5225 //actual steering angle in radius corresponding to the min position limit
+<<<<<<< HEAD:include/aruco-course-correction/daksh-aruco-corrector.ino
+=======
+#define param 1
+>>>>>>> e1205cf9109f9d4d6412b9af46f59143cc58ec12:include/aruco-course-correction/dual-manual-autonomous.ino
 
 
 //define a struct for vehicle control (actual states VS target states)
