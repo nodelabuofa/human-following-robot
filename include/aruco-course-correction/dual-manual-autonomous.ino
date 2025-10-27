@@ -1,5 +1,5 @@
 #include <SCServo.h>
-#include <Ticker.h>
+#include <Timer.h>
 #include <ros.h>
 #include <geometry_msgs/Twist.h>
 #include <math.h>
@@ -11,13 +11,13 @@
 #define RIGHT_MOTOR_ID 2
 #define VEHICLE_D 0.1667 //vehicle left right wheel distance
 #define VEHICLE_L 0.1778 //vehicle front rear wheel distance
-#define STEERING_POS_MAX 2500 //steering motor max position limit
-#define STEERING_POS_MIN 1700 //steering motor min position limit
-#define STEERING_POS_MID 2079 //steering motor middle position (for the steering motor position initialization)
-#define STEERING_RAD2POS_SLOPE 786.6273353 //linear mapping slope for actual steering angle in radius to motor position convertion
+#define STEERING_POS_MAX 3225 //steering motor max position limit
+#define STEERING_POS_MIN 2265 //steering motor min position limit
+#define STEERING_POS_MID 2745 //steering motor middle position (for the steering motor position initialization)
+#define STEERING_RAD2POS_SLOPE 960.62 //linear mapping slope for actual steering angle in radius to motor position convertion
 #define TURNING_RADIOUS_MIN 0.35 //calibrated minimum turning radius (for max/min steering angles)
-#define POS_MAX_CORRES_RAD 0.535 //actual steering angle in radius corresponding to the max position limit
-#define POS_MIN_CORRES_RAD -0.482 //actual steering angle in radius corresponding to the min position limit
+#define POS_MAX_CORRES_RAD 0.483 //actual steering angle in radius corresponding to the max position limit
+#define POS_MIN_CORRES_RAD -0.5225 //actual steering angle in radius corresponding to the min position limit
 #define param 1
 
 
@@ -34,7 +34,7 @@ typedef struct wheel_ctr_param {
 // Set struct and params for PID control
 wheel_ctr_param wheel_ctr;
 SMS_STS sms_sts;
-float p_value = 6000, i_value = 50, d_value = 0;
+float p_value = 7500, i_value = 75, d_value = 750;
 float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1000000;
 
 //void twist_cmd_callback(const geometry_msgs::Twist& twist_cmd){
@@ -62,10 +62,26 @@ float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1
 //note: use steering_vel_cmd.linear.x as left rear motor speed in m/s !!!
 //note: use steering_vel_cmd.linear.y as right rear motor speed in m/s !!!
 //note: use steering_vel_cmd.angular.z as steering angle in rad !!!
-void steering_vel_cmd_callback(const geometry_msgs::Twist& steering_vel_cmd){
+void steering_vel_cmd_callback(const geometry_msgs::Twist& steering_vel_cmd)
+{
     wheel_ctr.target_vel_L = int32_t(steering_vel_cmd.linear.x * 1000000);
     wheel_ctr.target_vel_R = int32_t(steering_vel_cmd.linear.y * 1000000);
-    wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_vel_cmd.angular.z - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE); 
+
+    const float STEERING_ANGLE_MIN_RAD = -0.5225;
+    const float STEERING_ANGLE_MAX_RAD = 0.483;
+
+    float steering_angle = steering_vel_cmd.angular.z;
+
+    if(steering_angle < STEERING_ANGLE_MIN_RAD)
+    {
+      steering_angle = STEERING_ANGLE_MIN_RAD;
+    }
+    else if(steering_angle > STEERING_ANGLE_MAX_RAD)
+    {
+      steering_angle = STEERING_ANGLE_MAX_RAD;
+    }
+    
+    wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_angle - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE); 
 }
 
 //define ROS publication & subscription for steering angle & left/right motor commands/feedbacks
@@ -160,7 +176,7 @@ void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
 }
 
 //periodic PWM control & steering angle control callback function (every 20ms)
-Ticker t;
+Timer t;
 void timerCallback() {
   noInterrupts();
   wheel_ctr.wheel_vel_L = (motor_left_counter - motor_left_old) * (int16_t)encoder2linear_v;
@@ -170,21 +186,24 @@ void timerCallback() {
   int steering_pos_diff = 9999;
   sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
   wheel_ctr.steering_position = sms_sts.ReadPos(1);
-  if(!sms_sts.getErr())
+  if(!sms_sts.getLastError())
     steering_pos_diff = abs(wheel_ctr.steering_position - wheel_ctr.target_position);    
 //  delay(5);
     
   //wait for the steering motor to reach its target position and then drive the rear motors (could be improved with other techniques)
-  if(steering_pos_diff <= 10) {
+//   if(steering_pos_diff <= 10)
+//   {
     //zero speed operation: let both rear motors brake
-    if(wheel_ctr.target_vel_L == 0 && wheel_ctr.target_vel_R == 0) {
+    if(wheel_ctr.target_vel_L == 0 && wheel_ctr.target_vel_R == 0) 
+    {
       ledcWrite(motor_left_channel1, 1000);
       ledcWrite(motor_left_channel2, 1000);
       ledcWrite(motor_right_channel1, 1000);
       ledcWrite(motor_right_channel2, 1000);    
     }
     //compute PWM output values for both left and right rear motors
-    else {
+    else 
+    {
       wheel_ctr.errL = wheel_ctr.target_vel_L - wheel_ctr.wheel_vel_L;
       wheel_ctr.errR = wheel_ctr.target_vel_R - wheel_ctr.wheel_vel_R;
       wheel_ctr.pwm_outputL += (int16_t)((p_value*(wheel_ctr.errL-wheel_ctr.err_preL) + i_value*wheel_ctr.errL + d_value*(wheel_ctr.errL - 2*wheel_ctr.err_preL + wheel_ctr.err_pre_preL))/1000000);
@@ -196,13 +215,13 @@ void timerCallback() {
       wheel_ctr.err_pre_preL = wheel_ctr.err_preL; 
       wheel_ctr.err_pre_preR = wheel_ctr.err_preR;      
     }
-  }
-  else {
-    ledcWrite(motor_left_channel1, 0);
-    ledcWrite(motor_left_channel2, 0);
-    ledcWrite(motor_right_channel1, 0);
-    ledcWrite(motor_right_channel2, 0);
-  }
+//  }
+//   else {
+//     ledcWrite(motor_left_channel1, 0);
+//     ledcWrite(motor_left_channel2, 0);
+//     ledcWrite(motor_right_channel1, 0);
+//     ledcWrite(motor_right_channel2, 0);
+//   }
 
   motor_left_old = motor_left_counter;
   motor_right_old = motor_right_counter;
@@ -238,7 +257,7 @@ void setup()
   wheel_ctr.target_position = STEERING_POS_MID;
 
   //Initialize the timer
-  t.attach_ms(20, timerCallback); 
+  t.every(20, timerCallback);
 
   delay(1000);
 }
@@ -246,6 +265,7 @@ void setup()
 uint8_t loop_counter = 0;
 void loop()
 {
+  t.update();
   loop_counter += 1;
 
   //publish the motors' current states at a frequency around 22Hz
