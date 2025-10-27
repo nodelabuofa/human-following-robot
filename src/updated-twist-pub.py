@@ -16,12 +16,12 @@ class UpdatedTwistPub:
     def __init__(self):
         rospy.init_node('updated_twist_pub')
 
-        # Subscribe to aruco-corners-topic
+        # Subscribe to aruco_corners_topic
         self.aruco_corner_sub = rospy.Subscriber('aruco_corners_topic', Float32MultiArray, self.interaction_matrix_callback)
-        rospy.loginfo("Subscribed to aruco-corners-topic")
+        rospy.loginfo("Subscribed to aruco_corners_topic")
 
         # publish to updated_twist_topic
-        self.updated_twist_pub = rospy.Publisher('updated_twist_topic', Twist, queue_size=10)
+        self.updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
 
     def interaction_matrix_callback(self, aruco_corners_msg):
         """
@@ -33,51 +33,57 @@ class UpdatedTwistPub:
         Returns:
         """
         # intrinsic ZED mini camera parameters
-        f = 5 # focal length, UPDATE
-        rho_w = 3 # pixel width conversion, UPDATE
-        rho_h = 2 # pixel height conversion, UPDATE
+        f = 366 # focal length, UPDATE
+        rho = 0.000002 # physical individual square pixel sensor width AND height conversion
+        cx = 315
+        cy = 178
 
         aruco_corners_data = np.array(aruco_corners_msg.data, dtype=np.float32)
 
         # unpack (x,y,d) to (u,v,Z)
-        u = aruco_corners_data[0] 
-        v = aruco_corners_data[1]
+        u_0 = aruco_corners_data[0] 
+        v_0 = aruco_corners_data[1]
         Z = aruco_corners_data[2]
 
-        # normalizes to image coordinates, UPDATE
-        u_bar = 450 - u
-        v_bar = 300 - v
+        # flip origin from top left to bottom left to follow math conventions (360 is pixel resolution height)
+        v_flipped = 360 - v_0
+
+        # convert from origin at bottom left to origin at center
+        u = cx - u_0
+        v = cy - v_flipped
+
+        # specify target position of ArUco marker
+        u_desired = -100
+        v_desired = -50
+        u_bar = u_desired - u
+        v_bar = v_desired - v
 
         # 2x6 empty matrix
         L = np.zeros((2, 6), dtype=np.float32)
 
         # First row
-        L[0, 0] = -f / (rho_w * Z)
+        L[0, 0] = -f / Z
         L[0, 1] = 0
         L[0, 2] = u_bar / Z
-        L[0, 3] = (u_bar * v_bar * rho_h) / f
-        L[0, 4] = -f - (u_bar ** 2 * rho_w) / f
+        L[0, 3] = u_bar * v_bar / f
+        L[0, 4] = -f * rho  - ((u_bar ** 2) / f)
         L[0, 5] = v_bar
 
         # Second row
         L[1, 0] = 0
-        L[1, 1] = -f / (rho_h * Z)
+        L[1, 1] = -f / Z
         L[1, 2] = v_bar / Z
-        L[1, 3] = f + (v_bar ** 2 * rho_h) / f
-        L[1, 4] = -(u_bar * v_bar * rho_h) / f
+        L[1, 3] = f * rho + (v_bar ** 2) / f
+        L[1, 4] = -(u_bar * v_bar) / f
         L[1, 5] = -u_bar
 
         L_inv = np.linalg.pinv(L)
-        rospy.loginfo(f'Pseudo Inverse of Interaction Matrix L:\n{L_inv}')
-
-        # momentary fixed desired pixel position of corner
-        u_desired = 200
-        v_desired = 250
+        # rospy.loginfo(f'Pseudo Inverse of Interaction Matrix L:\n{L_inv}')
 
         # control gain
-        lambda_gain = 0.5
+        lambda_gain = 2
 
-        e = np.array([u - u_desired, v - v_desired], dtype=np.float32)
+        e = np.array([u_bar, v_bar], dtype=np.float32)
 
          # Compute twist
         v_twist = -lambda_gain * L_inv @ e  # Shape: (6,1)
