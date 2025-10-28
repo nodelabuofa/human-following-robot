@@ -1,5 +1,4 @@
 #include <SCServo.h>
-#include <Timer.h>
 #include <ros.h>
 #include <geometry_msgs/Twist.h>
 #include <math.h>
@@ -15,86 +14,10 @@
 #define STEERING_POS_MIN 2265 //steering motor min position limit
 #define STEERING_POS_MID 2745 //steering motor middle position (for the steering motor position initialization)
 #define STEERING_RAD2POS_SLOPE 960.62 //linear mapping slope for actual steering angle in radius to motor position convertion
-#define TURNING_RADIOUS_MIN 0.35 //calibrated minimum turning radius (for max/min steering angles)
 #define POS_MAX_CORRES_RAD 0.483 //actual steering angle in radius corresponding to the max position limit
 #define POS_MIN_CORRES_RAD -0.5225 //actual steering angle in radius corresponding to the min position limit
-<<<<<<< HEAD:include/aruco-course-correction/daksh-aruco-corrector.ino
-=======
-#define param 1
->>>>>>> e1205cf9109f9d4d6412b9af46f59143cc58ec12:include/aruco-course-correction/dual-manual-autonomous.ino
-
-
-//define a struct for vehicle control (actual states VS target states)
-typedef struct wheel_ctr_param {
-  int32_t wheel_vel_L, wheel_vel_R;
-  int32_t target_vel_L, target_vel_R;
-  int16_t steering_position, target_position;
-  int32_t errL, err_preL, err_pre_preL;
-  int32_t errR, err_preR, err_pre_preR;
-  int16_t pwm_outputL, pwm_outputR;
-} wheel_ctr_param;
-
-// Set struct and params for PID control
-wheel_ctr_param wheel_ctr;
-SMS_STS sms_sts;
-float p_value = 7500, i_value = 75, d_value = 750;
-float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1000000;
-
-//void twist_cmd_callback(const geometry_msgs::Twist& twist_cmd){
-//  float turning_radius, steering_angle, v_L, v_R;
-//  
-//  if(twist_cmd.angular.z != 0) {
-//    turning_radius = twist_cmd.linear.x / twist_cmd.angular.z;
-//    if(abs(turning_radius < TURNING_RADIOUS_MIN))
-//      turning_radius = (turning_radius / abs(turning_radius)) * TURNING_RADIOUS_MIN;
-//    steering_angle = atan(VEHICLE_L / turning_radius);
-//    v_L = twist_cmd.linear.x * (turning_radius - VEHICLE_D/2) / turning_radius;
-//    v_R = twist_cmd.linear.x * (turning_radius + VEHICLE_D/2) / turning_radius;
-//  }
-//  else {
-//    steering_angle = 0.0;
-//    v_L = v_R = twist_cmd.linear.x;
-//  }
-//
-//  wheel_ctr.target_vel_L = int32_t(v_L * 1000000);
-//  wheel_ctr.target_vel_R = int32_t(v_R * 1000000);
-//  wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_angle - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE);
-//}
-
-//callback funtion that sets the target left and right rear wheel linear speeds, and steering angle
-//note: use steering_vel_cmd.linear.x as left rear motor speed in m/s !!!
-//note: use steering_vel_cmd.linear.y as right rear motor speed in m/s !!!
-//note: use steering_vel_cmd.angular.z as steering angle in rad !!!
-void steering_vel_cmd_callback(const geometry_msgs::Twist& steering_vel_cmd)
-{
-    wheel_ctr.target_vel_L = int32_t(steering_vel_cmd.linear.x * 1000000);
-    wheel_ctr.target_vel_R = int32_t(steering_vel_cmd.linear.y * 1000000);
-
-    const float STEERING_ANGLE_MIN_RAD = -0.5225;
-    const float STEERING_ANGLE_MAX_RAD = 0.483;
-
-    float steering_angle = steering_vel_cmd.angular.z;
-
-    if(steering_angle < STEERING_ANGLE_MIN_RAD)
-    {
-      steering_angle = STEERING_ANGLE_MIN_RAD;
-    }
-    else if(steering_angle > STEERING_ANGLE_MAX_RAD)
-    {
-      steering_angle = STEERING_ANGLE_MAX_RAD;
-    }
-    
-    wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_angle - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE); 
-}
-
-//define ROS publication & subscription for steering angle & left/right motor commands/feedbacks
-ros::NodeHandle nh;
-//geometry_msgs::Twist vehicle_current_twist;
-geometry_msgs::Twist vehicle_current_steering_vel;
-//ros::Subscriber<geometry_msgs::Twist> twist_cmd_sub("vehicle_target_twist", &twist_cmd_callback);
-ros::Subscriber<geometry_msgs::Twist> steering_vel_cmd_sub("/updated_twist_topic", &steering_vel_cmd_callback);
-//ros::Publisher vehicle_twist_pub("vehicle_current_twist", &vehicle_current_twist);
-ros::Publisher vehicle_steering_vel_pub("/vehicle_current_steering_vel", &vehicle_current_steering_vel);
+#define VELOCITY_TO_PWM_SCALE 500 // Scaling factor to convert m/s to PWM. Tune this value as needed.
+#define PWM_MAX 1023 // Max PWM value based on 10-bit resolution
 
 // Define motor input pins
 const int motor_pin_left_a = 12;
@@ -116,45 +39,27 @@ const int motor_right_channel1 = 2;
 const int motor_right_channel2 = 3;
 const int resolution = 10;
 
-// Motor readings variables & motor AB phase ISR functions
-uint32_t motor_left_counter, motor_right_counter, motor_left_old, motor_right_old;
-void IRAM_ATTR encoder_left_ISR() {
-  int pinAState = digitalRead(encoder_pin_left_a);
-  int pinBState = digitalRead(encoder_pin_left_b);
+volatile int16_t pwm_L = 0;
+volatile int16_t pwm_R = 0;
+volatile unsigned long last_cmd_time = 0;
 
-  if(pinAState == HIGH) {
-    if(pinBState == LOW)
-      motor_left_counter += 1;
-    else
-      motor_left_counter -= 1;
-  }
-  else {
-    if(pinBState == HIGH)
-      motor_left_counter += 1;
-    else
-      motor_left_counter -= 1;
-  }
-}
+const float STEERING_ANGLE_MIN_RAD = -0.5225;
+const float STEERING_ANGLE_MAX_RAD = 0.483;
 
-void IRAM_ATTR encoder_right_ISR() {
-  int pinAState = digitalRead(encoder_pin_right_a);
-  int pinBState = digitalRead(encoder_pin_right_b);
+// Simplified struct for vehicle control
+typedef struct wheel_ctr_param {
+  int32_t wheel_vel_L, wheel_vel_R;
+  int16_t steering_position, target_position;
+} wheel_ctr_param;
 
-  if(pinAState == HIGH) {
-    if(pinBState == LOW)
-      motor_right_counter -= 1;
-    else
-      motor_right_counter += 1;
-  }
-  else {
-    if(pinBState == HIGH)
-      motor_right_counter -= 1;
-    else
-      motor_right_counter += 1;
-  }
-}
+// Set struct
+wheel_ctr_param wheel_ctr;
+SMS_STS sms_sts;
 
-//motor control PWM value outputs; left and right motors have different polarities
+// Conversion factor for encoder feedback
+float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1000000;
+
+// Motor control PWM value outputs; left and right motors have different polarities
 void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
     if(motor_id == LEFT_MOTOR_ID) {
       if(output_value >= 0) {
@@ -178,67 +83,91 @@ void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
     }
 }
 
-//periodic PWM control & steering angle control callback function (every 20ms)
-Timer t;
-void timerCallback() {
-  noInterrupts();
-  wheel_ctr.wheel_vel_L = (motor_left_counter - motor_left_old) * (int16_t)encoder2linear_v;
-  wheel_ctr.wheel_vel_R = (motor_right_counter - motor_right_old) * (int16_t)encoder2linear_v;
-  interrupts();
+// New unified callback function to handle incoming Twist commands
+// Note: steering_vel_cmd.linear.x is left motor speed in m/s
+// Note: steering_vel_cmd.linear.y is right motor speed in m/s
+// Note: steering_vel_cmd.angular.z is steering angle in radians
+void updated_twist_callback(const geometry_msgs::Twist& twist_cmd)
+{
+    // --- Steering Control ---
 
-  int steering_pos_diff = 9999;
-  sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
-  wheel_ctr.steering_position = sms_sts.ReadPos(1);
-  if(!sms_sts.getLastError())
-    steering_pos_diff = abs(wheel_ctr.steering_position - wheel_ctr.target_position);    
-//  delay(5);
+    last_cmd_time = millis();
     
-  //wait for the steering motor to reach its target position and then drive the rear motors (could be improved with other techniques)
-//   if(steering_pos_diff <= 10)
-//   {
-    //zero speed operation: let both rear motors brake
-    if(wheel_ctr.target_vel_L == 0 && wheel_ctr.target_vel_R == 0) 
-    {
-      ledcWrite(motor_left_channel1, 1000);
-      ledcWrite(motor_left_channel2, 1000);
-      ledcWrite(motor_right_channel1, 1000);
-      ledcWrite(motor_right_channel2, 1000);    
-    }
-    //compute PWM output values for both left and right rear motors
-    else 
-    {
-      wheel_ctr.errL = wheel_ctr.target_vel_L - wheel_ctr.wheel_vel_L;
-      wheel_ctr.errR = wheel_ctr.target_vel_R - wheel_ctr.wheel_vel_R;
-      wheel_ctr.pwm_outputL += (int16_t)((p_value*(wheel_ctr.errL-wheel_ctr.err_preL) + i_value*wheel_ctr.errL + d_value*(wheel_ctr.errL - 2*wheel_ctr.err_preL + wheel_ctr.err_pre_preL))/1000000);
-      wheel_ctr.pwm_outputR += (int16_t)((p_value*(wheel_ctr.errR-wheel_ctr.err_preR) + i_value*wheel_ctr.errR + d_value*(wheel_ctr.errR - 2*wheel_ctr.err_preR + wheel_ctr.err_pre_preR))/1000000);
-      pwm_output_ctr(wheel_ctr.pwm_outputL, 1);
-      pwm_output_ctr(wheel_ctr.pwm_outputR, 2);
-      wheel_ctr.err_preL = wheel_ctr.errL; 
-      wheel_ctr.err_preR = wheel_ctr.errR;
-      wheel_ctr.err_pre_preL = wheel_ctr.err_preL; 
-      wheel_ctr.err_pre_preR = wheel_ctr.err_preR;      
-    }
-//  }
-//   else {
-//     ledcWrite(motor_left_channel1, 0);
-//     ledcWrite(motor_left_channel2, 0);
-//     ledcWrite(motor_right_channel1, 0);
-//     ledcWrite(motor_right_channel2, 0);
-//   }
 
-  motor_left_old = motor_left_counter;
-  motor_right_old = motor_right_counter;
+    float steering_angle = twist_cmd.angular.y;
+
+    // Clamp the steering angle to safeguard the linkage
+    if(steering_angle < STEERING_ANGLE_MIN_RAD)
+    {
+      steering_angle = STEERING_ANGLE_MIN_RAD;
+    }
+    else if(steering_angle > STEERING_ANGLE_MAX_RAD)
+    {
+      steering_angle = STEERING_ANGLE_MAX_RAD;
+    }
+    
+    // Convert steering angle in radians to motor position and command the servo
+    wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_angle - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE);
+
+    // --- Throttle Control ---
+    // If target velocities are zero, brake the motors
+      // Convert target linear velocities directly to PWM values
+      pwm_L = (int16_t)(twist_cmd.linear.x * 500);
+      pwm_R = (int16_t)(twist_cmd.linear.y * 500);
+
+      // Clamp PWM values to the maximum allowed range
+      if (pwm_L > PWM_MAX) pwm_L = 800;
+      if (pwm_L < -PWM_MAX) pwm_L = -800;
+      if (pwm_R > PWM_MAX) pwm_R = 800;
+      if (pwm_R < -PWM_MAX) pwm_R = -800;
+}
+
+// Define ROS publication & subscription
+ros::NodeHandle nh;
+geometry_msgs::Twist vehicle_current_steering_vel;
+ros::Subscriber<geometry_msgs::Twist> updated_twist_sub("/updated_twist_topic", &updated_twist_callback);
+ros::Publisher vehicle_steering_vel_pub("/vehicle_current_steering_vel", &vehicle_current_steering_vel);
+
+
+
+// Motor readings variables & motor AB phase ISR functions
+uint32_t motor_left_counter, motor_right_counter, motor_left_old, motor_right_old;
+void IRAM_ATTR encoder_left_ISR() {
+  int pinAState = digitalRead(encoder_pin_left_a);
+  int pinBState = digitalRead(encoder_pin_left_b);
+
+  if(pinAState == HIGH) {
+    if(pinBState == LOW) motor_left_counter += 1;
+    else motor_left_counter -= 1;
+  }
+  else {
+    if(pinBState == HIGH) motor_left_counter += 1;
+    else motor_left_counter -= 1;
+  }
+}
+
+void IRAM_ATTR encoder_right_ISR() {
+  int pinAState = digitalRead(encoder_pin_right_a);
+  int pinBState = digitalRead(encoder_pin_right_b);
+
+  if(pinAState == HIGH) {
+    if(pinBState == LOW) motor_right_counter -= 1;
+    else motor_right_counter += 1;
+  }
+  else {
+    if(pinBState == HIGH) motor_right_counter -= 1;
+    else motor_right_counter += 1;
+  }
 }
 
 void setup()
 {
-  //set up ROS publisher and subscriber for ROS_serial
+  // Set up ROS publisher and subscriber for ROS_serial
   nh.initNode();
   nh.advertise(vehicle_steering_vel_pub);
-//  nh.subscribe(twist_cmd_sub);
-  nh.subscribe(steering_vel_cmd_sub);
+  nh.subscribe(updated_twist_sub);
 
-  //Set up rear motor I/O pins & ISR functions
+  // Set up rear motor I/O pins & ISR functions
   pinMode(encoder_pin_left_a, INPUT);
   pinMode(encoder_pin_left_b, INPUT);
   pinMode(encoder_pin_right_a, INPUT);
@@ -254,13 +183,12 @@ void setup()
   ledcSetup(motor_right_channel2, freq, resolution);
   ledcAttachPin(motor_pin_right_b, motor_right_channel2);
 
-  //set up steering motor serial communication interface
+  // Set up steering motor serial communication interface
   Serial2.begin(1000000, SERIAL_8N1, 16, 17);
   sms_sts.pSerial = &Serial2;
   wheel_ctr.target_position = STEERING_POS_MID;
-
-  //Initialize the timer
-  t.every(20, timerCallback);
+  
+  // No timer initialization needed
 
   delay(1000);
 }
@@ -268,21 +196,16 @@ void setup()
 uint8_t loop_counter = 0;
 void loop()
 {
-  t.update();
-  loop_counter += 1;
 
-  //publish the motors' current states at a frequency around 22Hz
-  //note: use vehicle_current_steering_vel.linear.x as left rear motor speed in m/s !!!
-  //note: use vehicle_current_steering_vel.linear.y as right rear motor speed in m/s !!!
-  //note: use vehicle_current_steering_vel.angular.z as steering angle in rad !!!
-  if(loop_counter == 4) {
-    vehicle_current_steering_vel.angular.z = (wheel_ctr.steering_position - STEERING_POS_MIN) / STEERING_RAD2POS_SLOPE + POS_MIN_CORRES_RAD;
-    vehicle_current_steering_vel.linear.x = wheel_ctr.wheel_vel_L / 1000000.0;
-    vehicle_current_steering_vel.linear.y = wheel_ctr.wheel_vel_R / 1000000.0;
-    vehicle_steering_vel_pub.publish(&vehicle_current_steering_vel);
-
-    nh.spinOnce();  
-    loop_counter = 0;
+ if (millis() - last_cmd_time > 5000) {
+    pwm_L = 0;
+    pwm_R = 0;
   }
+ // Send PWM commands to the motors
+  pwm_output_ctr(pwm_L, LEFT_MOTOR_ID);
+  pwm_output_ctr(pwm_R, RIGHT_MOTOR_ID);
+  sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
+  
+  nh.spinOnce();
   delay(10);
 }
