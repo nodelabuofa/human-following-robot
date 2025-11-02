@@ -79,14 +79,14 @@ class ArucoCornersPub:
 
                 # format corners to 2 decimal places
                 formatted_corners = ', '.join([f"{val:.2f}" if isinstance(val, float) else str(val) for val in flat_corners])
-                print(f"Marker ID {ids[i][0]} corners: [{formatted_corners}]")
+                # print(f"Marker ID {ids[i][0]} corners: [{formatted_corners}]")
 
             # Draw detected markers only if any are found
             if ids is not None and len(ids) > 0:
                 cv2.aruco.drawDetectedMarkers(cv_image, corners, ids)
-                rospy.loginfo("YES: ArUco marker detected")
-            else:
-                rospy.loginfo("NO: No marker detected")
+            #     rospy.loginfo("YES: ArUco marker detected")
+            # else:
+            #     rospy.loginfo("NO: No marker detected")
 
             # Visualize after drawing (or not drawing) the markers
             cv2.imshow("Image", cv_image)

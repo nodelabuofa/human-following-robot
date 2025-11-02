@@ -22,6 +22,7 @@ class UpdatedTwistPub:
 
         # publish to updated_twist_topic
         self.updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
+        self.error_pub = rospy.Publisher('/servo_error_topic', Float32MultiArray, queue_size=10 )
 
         # ArUco must be in particular orientation
         self.desired_corners = {
@@ -55,7 +56,7 @@ class UpdatedTwistPub:
 
         # control gain
         steering_gain = 0.5
-        throttle_gain = -3
+        throttle_gain = -1.25
 
         # unpacks (x,y,d) to (u,v,Z) for all 4 corners
         for i in range(4): # 0, 1, 2, 3
@@ -75,7 +76,6 @@ class UpdatedTwistPub:
 
             u_error = u - u_desired
             v_error = v - v_desired
-            rospy.loginfo(f'Corner {i}: Error vector ({u_error}, {v_error})')
 
             e = np.array([u_error, v_error], dtype=np.float32) # error vector for this corner
 
@@ -104,7 +104,8 @@ class UpdatedTwistPub:
         L_stacked = np.vstack(interaction_matrices) # shape: (8,6)
 
         if np.isnan(L_stacked).any():
-            rospy.logerr("Missing depth values, matrix not computed.")
+            # rospy.logerr("Missing depth values, matrix not computed.")
+            return
         else:
             e_stacked = np.concatenate(error_vectors) # shape: (8,1)
 
@@ -136,6 +137,10 @@ class UpdatedTwistPub:
                 else: # turning right
                     updated_twist.linear.x = float(v_twist[2] * throttle_gain) # outer (left) wheel has max velocity
                     updated_twist.linear.y = float(((turning_radius - (0.1667 / 2)) / (turning_radius + (0.1667 / 2))) * float(v_twist[2]) * throttle_gain)
+
+            servo_error_msg = Float32MultiArray() # empty array datatype compatible with ROS
+            servo_error_msg.data = e_stacked
+            self.error_pub.publish(servo_error_msg)
 
             self.updated_twist_pub.publish(updated_twist)
         return
