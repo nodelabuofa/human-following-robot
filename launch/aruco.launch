@@ -9,13 +9,11 @@
   </node>4
   
   <!-- Node for the vehicle steering angle + velocity control -->
-  <node name="steering_velocity_control" pkg="vehicle_steering_velocity_ctr" 
-        type="vehicle_steering_vel_pub_node" output="screen" args="$(arg control_mode)">
+  <node name="aruco_corners_node" pkg="aruco-course-correction" type="aruco-corners-pub.py" output="screen">
   </node>
   
   <!-- Node for getting the vehicle's current twist -->
-  <node name="steering_velocity_feedback" pkg="vehicle_steering_velocity_ctr" 
-        type="vehicle_steering_vel_sub_node" output="screen">
+  <node name="updated_twist_node" pkg="aruco-course-correction" type="updated-twist-pub.py" output="screen">
   </node>
   
 </launch>

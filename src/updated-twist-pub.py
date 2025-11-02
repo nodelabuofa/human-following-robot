@@ -22,6 +22,16 @@ class UpdatedTwistPub:
 
         # publish to updated_twist_topic
         self.updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
+        self.error_pub = rospy.Publisher('/servo_error_topic', Float32MultiArray, queue_size=10 )
+
+        # ArUco must be in particular orientation
+        self.desired_corners = {
+            0: {'u': -100.0, 'v': 100.0},  # Target for top left corner
+            1: {'u': 100.0, 'v': 100.0},   # Target for top right corner
+            2: {'u': 100.0, 'v': -50.0},    # Target for bottom right corner
+            3: {'u': -100.0, 'v': -50.0}    # Target for bottom left corner
+        }
+        
 
     def interaction_matrix_callback(self, aruco_corners_msg):
         """
@@ -29,9 +39,9 @@ class UpdatedTwistPub:
         
         Args:
             aruco_corners_msg (Float32MultiArray): similar to list, content: [x1, y1, d1, x2, ..., y4, d4]
-
         Returns:
         """
+
         # intrinsic ZED mini camera parameters
         f = 366 # focal length, UPDATE
         rho = 0.000002 # physical individual square pixel sensor width AND height conversion
@@ -39,69 +49,102 @@ class UpdatedTwistPub:
         cy = 178
 
         aruco_corners_data = np.array(aruco_corners_msg.data, dtype=np.float32)
-
-        # unpack (x,y,d) to (u,v,Z)
-        u_0 = aruco_corners_data[0] 
-        v_0 = aruco_corners_data[1]
-        Z = aruco_corners_data[2]
-
-        # flip origin from top left to bottom left to follow math conventions (360 is pixel resolution height)
-        v_flipped = 360 - v_0
-
-        # convert from origin at bottom left to origin at center
-        u = cx - u_0
-        v = cy - v_flipped
-
-        # specify target position of ArUco marker
-        u_desired = -100
-        v_desired = -50
-        u_bar = u_desired - u
-        v_bar = v_desired - v
-
-        # 2x6 empty matrix
-        L = np.zeros((2, 6), dtype=np.float32)
-
-        # First row
-        L[0, 0] = -f / Z
-        L[0, 1] = 0
-        L[0, 2] = u_bar / Z
-        L[0, 3] = u_bar * v_bar / f
-        L[0, 4] = -f * rho  - ((u_bar ** 2) / f)
-        L[0, 5] = v_bar
-
-        # Second row
-        L[1, 0] = 0
-        L[1, 1] = -f / Z
-        L[1, 2] = v_bar / Z
-        L[1, 3] = f * rho + (v_bar ** 2) / f
-        L[1, 4] = -(u_bar * v_bar) / f
-        L[1, 5] = -u_bar
-
-        L_inv = np.linalg.pinv(L)
         # rospy.loginfo(f'Pseudo Inverse of Interaction Matrix L:\n{L_inv}')
 
+        interaction_matrices = []
+        error_vectors = []
+
         # control gain
-        lambda_gain = 2
+        steering_gain = 0.5
+        throttle_gain = -0.75
 
-        e = np.array([u_bar, v_bar], dtype=np.float32)
+        # unpacks (x,y,d) to (u,v,Z) for all 4 corners
+        for i in range(4): # 0, 1, 2, 3
+            u_0 = aruco_corners_data[i*3 + 0]
+            v_0 = aruco_corners_data[i*3 + 1]
+            Z = aruco_corners_data[i*3 + 2]
 
-         # Compute twist
-        v_twist = -lambda_gain * L_inv @ e  # Shape: (6,1)
+            # flipping so origin at bottom right of visual feed
+            v_flipped = 360 - v_0
 
-        rospy.loginfo(f'Updated Twist Vector:\n{v_twist}')
+            # convert from origin at bottom left to origin at center
+            u = u_0 - cx
+            v = v_flipped - cy
 
-        updated_twist = Twist() # special geometry_msgs datatype digestible by ROS, float64
-        updated_twist.linear.x = float(v_twist[0])
-        updated_twist.linear.y = float(v_twist[1])
-        updated_twist.linear.z = float(v_twist[2])
-        updated_twist.angular.x = float(v_twist[3])
-        updated_twist.angular.y = float(v_twist[4])
-        updated_twist.angular.z = float(v_twist[5])
+            u_desired = self.desired_corners[i]['u']
+            v_desired = self.desired_corners[i]['v']
 
-        self.updated_twist_pub.publish(updated_twist)
+            u_error = u - u_desired
+            v_error = v - v_desired
 
+            e = np.array([u_error, v_error], dtype=np.float32) # error vector for this corner
+
+            # 2x6 empty interaction matrix
+            L = np.zeros((2, 6), dtype=np.float32)
+
+            # First row
+            L[0, 0] = -f / Z
+            L[0, 1] = 0
+            L[0, 2] = u_error / Z
+            L[0, 3] = (u_error * v_error) / f
+            L[0, 4] = -f * rho  - ((u_error ** 2) / f)
+            L[0, 5] = v_error
+
+            # Second row
+            L[1, 0] = 0
+            L[1, 1] = -f / Z
+            L[1, 2] = v_error / Z
+            L[1, 3] = f * rho + ((v_error ** 2) / f)
+            L[1, 4] = -(u_error * v_error) / f
+            L[1, 5] = -u_error
+
+            interaction_matrices.append(L)
+            error_vectors.append(e)
+        
+        L_stacked = np.vstack(interaction_matrices) # shape: (8,6)
+
+        if np.isnan(L_stacked).any():
+            # rospy.logerr("Missing depth values, matrix not computed.")
+            return
+        else:
+            e_stacked = np.concatenate(error_vectors) # shape: (8,1)
+
+            L_stacked_inv = np.linalg.pinv(L_stacked) # shape: (6,8)
+
+            v_twist = -1 * L_stacked_inv @ e_stacked  # Shape: (6,1)
+
+            updated_twist = Twist() # special geometry_msgs datatype digestible by ROS, float64
+                    
+            updated_twist.angular.x = float(v_twist[3])
+            updated_twist.angular.y = float(np.arctan(v_twist[4] * 0.1825 / v_twist[2])) * steering_gain
+            updated_twist.angular.z = float(v_twist[5])
+
+            updated_twist.linear.z = float(v_twist[2])
+
+            # linear.x is left wheel, linear.y is right wheel
+            # left is positive radian max, right is negative radian max
+            # 0.1778 is vehicle length (wheel center to center), 0.1667 wheelbase (rear tires, tread center to center)
+            if updated_twist.angular.y == 0:
+                # z axis portrudes perpendicular from lens, so z from computed twist is desired linear velocity of end effector/camera
+                updated_twist.linear.x = float(v_twist[2]) * throttle_gain
+                updated_twist.linear.y = float(v_twist[2]) * throttle_gain
+            else:
+                turning_radius = 0.1778 / np.tan(updated_twist.angular.y) # 0.
+                
+                if turning_radius > 0: # turning left
+                    updated_twist.linear.y = float(v_twist[2] * throttle_gain) # outer (right) wheel has max velocity
+                    updated_twist.linear.x = float(((turning_radius - (0.1667 / 2)) / (turning_radius + (0.1667 / 2))) * float(v_twist[2]) * throttle_gain)
+                else: # turning right
+                    updated_twist.linear.x = float(v_twist[2] * throttle_gain) # outer (left) wheel has max velocity
+                    updated_twist.linear.y = float(((turning_radius - (0.1667 / 2)) / (turning_radius + (0.1667 / 2))) * float(v_twist[2]) * throttle_gain)
+
+            servo_error_msg = Float32MultiArray() # empty array datatype compatible with ROS
+            servo_error_msg.data = e_stacked
+            self.error_pub.publish(servo_error_msg)
+
+            self.updated_twist_pub.publish(updated_twist)
         return
-
+    
     def run(self):
         rospy.spin()
 
@@ -111,175 +154,3 @@ if __name__ == '__main__':
         node.run()
     except rospy.ROSInterruptException:
         pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import rospy
-# import numpy as np
-# from std_msgs.msg import Float32MultiArray
-# from geometry_msgs.msg import Twist
-
-# class UpdatedTwistPub:
-#     def __init__(self):
-#         # Initialize ROS node
-#         rospy.init_node('ibvs_controller_node', anonymous=True)
-        
-#         # Parameters
-#         self.control_gain = rospy.get_param('~lambda_gain', 0.5)  # Control gain λ
-#         self.focal_length = rospy.get_param('~focal_length', 700.0)  # pixels
-#         self.depth_estimate = rospy.get_param('~depth_estimate', 1.0)  # meters (Z)
-        
-#         # Desired corner positions (ground truth) - set during calibration
-#         # Format: [x1, y1, x2, y2, x3, y3, x4, y4]
-#         self.desired_corners = rospy.get_param('~desired_corners', 
-#                                                [320, 200, 400, 200, 400, 280, 320, 280])
-#         self.desired_corners = np.array(self.desired_corners, dtype=np.float32)
-        
-#         # Image center (for normalized coordinates)
-#         self.image_width = rospy.get_param('~image_width', 672)
-#         self.image_height = rospy.get_param('~image_height', 376)
-#         self.u0 = self.image_width / 2.0
-#         self.v0 = self.image_height / 2.0
-        
-#         # Pixel size (if known, otherwise set to 1.0)
-#         self.pixel_size = rospy.get_param('~pixel_size', 1.0)
-        
-#         # Velocity limits for safety
-#         self.max_linear_vel = rospy.get_param('~max_linear_vel', 0.5)  # m/s
-#         self.max_angular_vel = rospy.get_param('~max_angular_vel', 1.0)  # rad/s
-        
-#         # Publisher for velocity commands
-#         self.twist_pub = rospy.Publisher('updated-twist-topic', Twist, queue_size=10)
-        
-#         # Subscriber to ArUco corners
-#         self.corner_sub = rospy.Subscriber('aruco-corners-topic', Float32MultiArray, 
-#                                           self.corner_callback)
-        
-#         rospy.loginfo("IBVS Controller Node Initialized")
-#         rospy.loginfo(f"Control gain λ: {self.control_gain}")
-#         rospy.loginfo(f"Desired corners: {self.desired_corners}")
-        
-#     def compute_interaction_matrix(self, corners):
-#         """
-#         Compute the interaction matrix L for point features in IBVS
-#         Based on: ṡ = Lv, where s are image features and v is camera velocity
-        
-#         For a point (u, v) in pixels:
-#         L = [-f/Z    0      ū/Z     ūv̄/f    -(f+ū²/f)   v̄  ]
-#             [ 0     -f/Z    v̄/Z   f+v̄²/f    -ūv̄/f     -ū ]
-        
-#         where ū = (u - u0) * pixel_size, v̄ = (v - v0) * pixel_size
-#         """
-#         num_points = len(corners) // 2
-#         L = np.zeros((2 * num_points, 6), dtype=np.float32)
-        
-#         f = self.focal_length
-#         Z = self.depth_estimate
-        
-#         for i in range(num_points):
-#             u = corners[2*i]
-#             v = corners[2*i + 1]
-            
-#             # Convert to normalized coordinates
-#             u_bar = (u - self.u0) * self.pixel_size
-#             v_bar = (v - self.v0) * self.pixel_size
-            
-#             # Fill interaction matrix for this point (2 rows)
-#             # Row for u coordinate
-#             L[2*i, 0] = -f / Z
-#             L[2*i, 1] = 0
-#             L[2*i, 2] = u_bar / Z
-#             L[2*i, 3] = u_bar * v_bar / f
-#             L[2*i, 4] = -(f + (u_bar**2) / f)
-#             L[2*i, 5] = v_bar
-            
-#             # Row for v coordinate
-#             L[2*i+1, 0] = 0
-#             L[2*i+1, 1] = -f / Z
-#             L[2*i+1, 2] = v_bar / Z
-#             L[2*i+1, 3] = f + (v_bar**2) / f
-#             L[2*i+1, 4] = -u_bar * v_bar / f
-#             L[2*i+1, 5] = -u_bar
-        
-#         return L
-    
-#     def corner_callback(self, msg):
-#         """
-#         Callback for ArUco corner positions
-#         Computes control law: v = -λ * L+ * e
-#         """
-#         try:
-#             # Current corner positions
-#             current_corners = np.array(msg.data, dtype=np.float32)
-            
-#             # Check if we have correct number of corners
-#             if len(current_corners) != len(self.desired_corners):
-#                 rospy.logwarn(f"Corner count mismatch: got {len(current_corners)}, expected {len(self.desired_corners)}")
-#                 return
-            
-#             # Compute visual error: e = s - s*
-#             error = current_corners - self.desired_corners
-            
-#             # Compute interaction matrix
-#             L = self.compute_interaction_matrix(current_corners)
-            
-#             # Compute pseudoinverse of interaction matrix
-#             # L+ = L^T (L L^T)^-1
-#             L_pinv = np.linalg.pinv(L)
-            
-#             # Compute velocity command: v = -λ * L+ * e
-#             velocity = -self.control_gain * L_pinv @ error
-            
-#             # velocity is [vx, vy, vz, wx, wy, wz]
-#             # For Ackermann steering ground robot, we primarily use:
-#             # - vx (forward velocity)
-#             # - wz (angular velocity / yaw rate)
-            
-#             # Create Twist message
-#             twist_msg = Twist()
-#             twist_msg.linear.x = np.clip(velocity[0], -self.max_linear_vel, self.max_linear_vel)
-#             twist_msg.linear.y = 0.0  # No lateral motion for Ackermann
-#             twist_msg.linear.z = 0.0  # No vertical motion
-            
-#             twist_msg.angular.x = 0.0
-#             twist_msg.angular.y = 0.0
-#             twist_msg.angular.z = np.clip(velocity[5], -self.max_angular_vel, self.max_angular_vel)
-            
-#             # Publish velocity command
-#             self.twist_pub.publish(twist_msg)
-            
-#             # Log error magnitude
-#             error_norm = np.linalg.norm(error)
-#             rospy.loginfo_throttle(1.0, f"Visual error: {error_norm:.2f} pixels, "
-#                                        f"Cmd - linear: {twist_msg.linear.x:.3f} m/s, "
-#                                        f"angular: {twist_msg.angular.z:.3f} rad/s")
-            
-#         except Exception as e:
-#             rospy.logerr(f"Error in corner callback: {str(e)}")
-    
-#     def run(self):
-#         """Keep the node running"""
-#         rospy.spin()
-
-# if __name__ == '__main__':
-#     try:
-#         node = IBVSControllerNode()
-#         node.run()
-#     except rospy.ROSInterruptException:
-#         pass

@@ -43,11 +43,15 @@ volatile int16_t pwm_L = 0;
 volatile int16_t pwm_R = 0;
 volatile unsigned long last_cmd_time = 0;
 
+const float STEERING_ANGLE_MIN_RAD = -0.5225;
+const float STEERING_ANGLE_MAX_RAD = 0.483;
+
 // Simplified struct for vehicle control
 typedef struct wheel_ctr_param {
   int32_t wheel_vel_L, wheel_vel_R;
   int16_t steering_position, target_position;
 } wheel_ctr_param;
+
 
 // Set struct
 wheel_ctr_param wheel_ctr;
@@ -87,8 +91,9 @@ void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
 void updated_twist_callback(const geometry_msgs::Twist& twist_cmd)
 {
     // --- Steering Control ---
-    const float STEERING_ANGLE_MIN_RAD = -0.5225;
-    const float STEERING_ANGLE_MAX_RAD = 0.483;
+
+    last_cmd_time = millis();
+    
 
     float steering_angle = twist_cmd.angular.y;
 
@@ -104,13 +109,12 @@ void updated_twist_callback(const geometry_msgs::Twist& twist_cmd)
     
     // Convert steering angle in radians to motor position and command the servo
     wheel_ctr.target_position = int16_t(STEERING_POS_MIN + (steering_angle - POS_MIN_CORRES_RAD) * STEERING_RAD2POS_SLOPE);
-    sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
 
     // --- Throttle Control ---
     // If target velocities are zero, brake the motors
       // Convert target linear velocities directly to PWM values
-      int16_t pwm_L = (int16_t)(twist_cmd.linear.x * 500);
-      int16_t pwm_R = (int16_t)(twist_cmd.linear.y * 500);
+      pwm_L = (int16_t)(twist_cmd.linear.x * 500);
+      pwm_R = (int16_t)(twist_cmd.linear.y * 500);
 
       // Clamp PWM values to the maximum allowed range
       if (pwm_L > PWM_MAX) pwm_L = 800;
@@ -193,9 +197,15 @@ void setup()
 uint8_t loop_counter = 0;
 void loop()
 {
+
+ if (millis() - last_cmd_time > 5000) {
+    pwm_L = 0;
+    pwm_R = 0;
+  }
  // Send PWM commands to the motors
   pwm_output_ctr(pwm_L, LEFT_MOTOR_ID);
   pwm_output_ctr(pwm_R, RIGHT_MOTOR_ID);
+  sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
   
   nh.spinOnce();
   delay(10);
