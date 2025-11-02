@@ -52,7 +52,6 @@ typedef struct wheel_ctr_param {
   int16_t steering_position, target_position;
 } wheel_ctr_param;
 
-
 // Set struct
 wheel_ctr_param wheel_ctr;
 SMS_STS sms_sts;
@@ -113,8 +112,8 @@ void updated_twist_callback(const geometry_msgs::Twist& twist_cmd)
     // --- Throttle Control ---
     // If target velocities are zero, brake the motors
       // Convert target linear velocities directly to PWM values
-      pwm_L = (int16_t)(twist_cmd.linear.x * 500);
-      pwm_R = (int16_t)(twist_cmd.linear.y * 500);
+      pwm_L = (int16_t)(twist_cmd.linear.x * 1000);
+      pwm_R = (int16_t)(twist_cmd.linear.y * 1000);
 
       // Clamp PWM values to the maximum allowed range
       if (pwm_L > PWM_MAX) pwm_L = 800;
@@ -198,7 +197,7 @@ uint8_t loop_counter = 0;
 void loop()
 {
 
- if (millis() - last_cmd_time > 5000) {
+ if (millis() - last_cmd_time > 2000) {
     pwm_L = 0;
     pwm_R = 0;
   }
