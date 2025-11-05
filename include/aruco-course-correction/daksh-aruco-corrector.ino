@@ -46,7 +46,11 @@ volatile int16_t pwm_L = 0;
 volatile int16_t pwm_R = 0;
 volatile unsigned long last_cmd_time = 0;
 
-std_msgs::Bool emergency_stop_command = False;
+bool emergency_stop_pressed = false; // initializes emergency stop flag globally so can be accessed in callback and void loop
+bool is_stopped = false; // flag if vehicle currently stopped
+const unsigned long STOP_DURATION = 10000; // stop for 10 seconds 
+volatile unsigned long emergency_stop_initiated_time = 0;
+
 
 const float STEERING_ANGLE_MIN_RAD = -0.5225;
 const float STEERING_ANGLE_MAX_RAD = 0.483;
@@ -66,31 +70,51 @@ SMS_STS sms_sts;
 
 // Motor control PWM value outputs; left and right motors have different polarities
 void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
-    if(motor_id == LEFT_MOTOR_ID) {
-      if(output_value >= 0) {
+    if(motor_id == LEFT_MOTOR_ID) 
+    {
+      if(output_value >= 0) 
+      {
         ledcWrite(motor_left_channel1, output_value);
         ledcWrite(motor_left_channel2, 0);
       }
-      else {
+      else if(output_value == 0)
+      {
+        ledcWrite(motor_left_channel1, 1000);
+        ledcWrite(motor_left_channel2, 1000);
+      }
+      else 
+      {
         ledcWrite(motor_left_channel2, -output_value);
         ledcWrite(motor_left_channel1, 0);      
       }        
     }
-    else if(motor_id == RIGHT_MOTOR_ID) {
-      if(output_value >= 0) {
+    else if(motor_id == RIGHT_MOTOR_ID) 
+    {
+      if(output_value >= 0) 
+      {
         ledcWrite(motor_right_channel1, output_value);
         ledcWrite(motor_right_channel2, 0);
       }
-      else {
+      else if(output_value == 0)
+      {
+        ledcWrite(motor_right_channel1, 1000);
+        ledcWrite(motor_right_channel2, 1000);
+      }
+      else 
+      {
         ledcWrite(motor_right_channel2, -output_value);
         ledcWrite(motor_right_channel1, 0);      
       }        
     }
 }
 
-void emergency_stop_callback(const std_msgs::Bool& emergency_stop_cmd)
+void emergency_stop_callback(const std_msgs::Bool& emergency_stop_cmd) // have to initialize before ROS node so it knows what you're talking about
 {
-  emergency_stop_command = emergency_stop_cmd
+  if (emergency_stop_cmd.data == true)
+  {
+    emergency_stop_pressed = true;
+  }
+  emergency_stop_initiated_time = millis();
 }
 
 // New unified callback function to handle incoming Twist commands
@@ -175,8 +199,9 @@ void setup()
 {
   // Set up ROS publisher and subscriber for ROS_serial
   nh.initNode();
-  nh.advertise(vehicle_steering_vel_pub);
+//  nh.advertise(vehicle_steering_vel_pub);
   nh.subscribe(updated_twist_sub);
+  nh.subscribe(emergency_stop_sub);
 
   // Set up rear motor I/O pins & ISR functions
   pinMode(encoder_pin_left_a, INPUT);
@@ -207,16 +232,25 @@ void setup()
 uint8_t loop_counter = 0;
 void loop()
 {
-
- if (millis() - last_cmd_time > 2000) {
+  if (emergency_stop_pressed == true)
+  {
+    if (millis() - emergency_stop_initiated_time <= STOP_DURATION)
+    {
+      pwm_output_ctr(0, LEFT_MOTOR_ID);
+      pwm_output_ctr(0, RIGHT_MOTOR_ID);
+      sms_sts.WritePosEx(1, STEERING_POS_MID, 0, 0); // Center the steering
+    }
+    else
+    {
+      emergency_stop_pressed = false; // reset emergency stop flag after stop duration
+    }
+  }
+  else if (millis() - last_cmd_time > 500) 
+  {
     pwm_L = 0;
     pwm_R = 0;
-  }
-   
-  if (emergency_stop_command == True)
-  {
-    pwm_output_ctr(0, LEFT_MOTOR_ID);
-    pwm_output_ctr(0, RIGHT_MOTOR_ID)
+    pwm_output_ctr(pwm_L, LEFT_MOTOR_ID);  // Send PWM commands to the motors
+    pwm_output_ctr(pwm_R, RIGHT_MOTOR_ID);
   }
   else
   {
