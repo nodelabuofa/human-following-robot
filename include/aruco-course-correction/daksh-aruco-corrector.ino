@@ -2,6 +2,8 @@
 #include <ros.h>
 #include <geometry_msgs/Twist.h>
 #include <math.h>
+#include <std_msgs/Bool.h>
+
 
 #define WHEEL_RAD 0.0375 //define wheel radius
 #define PUL_PER_ROUND 30000 //define number of output pulses per rotation round
@@ -18,6 +20,7 @@
 #define POS_MIN_CORRES_RAD -0.5225 //actual steering angle in radius corresponding to the min position limit
 #define VELOCITY_TO_PWM_SCALE 500 // Scaling factor to convert m/s to PWM. Tune this value as needed.
 #define PWM_MAX 1023 // Max PWM value based on 10-bit resolution
+#define ENABLE_BUTTON 4 // emergency stop button (L1 button above trigger on left)
 
 // Define motor input pins
 const int motor_pin_left_a = 12;
@@ -43,6 +46,8 @@ volatile int16_t pwm_L = 0;
 volatile int16_t pwm_R = 0;
 volatile unsigned long last_cmd_time = 0;
 
+std_msgs::Bool emergency_stop_command = False;
+
 const float STEERING_ANGLE_MIN_RAD = -0.5225;
 const float STEERING_ANGLE_MAX_RAD = 0.483;
 
@@ -57,7 +62,7 @@ wheel_ctr_param wheel_ctr;
 SMS_STS sms_sts;
 
 // Conversion factor for encoder feedback
-float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1000000;
+// float encoder2linear_v = 2.0 * PI * WHEEL_RAD / PUL_PER_ROUND / COUNT_PERIOD * 1000000;
 
 // Motor control PWM value outputs; left and right motors have different polarities
 void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
@@ -81,6 +86,11 @@ void pwm_output_ctr(int16_t output_value, int8_t motor_id) {
         ledcWrite(motor_right_channel1, 0);      
       }        
     }
+}
+
+void emergency_stop_callback(const std_msgs::Bool& emergency_stop_cmd)
+{
+  emergency_stop_command = emergency_stop_cmd
 }
 
 // New unified callback function to handle incoming Twist commands
@@ -126,7 +136,8 @@ void updated_twist_callback(const geometry_msgs::Twist& twist_cmd)
 ros::NodeHandle nh;
 geometry_msgs::Twist vehicle_current_steering_vel;
 ros::Subscriber<geometry_msgs::Twist> updated_twist_sub("/updated_twist_topic", &updated_twist_callback);
-ros::Publisher vehicle_steering_vel_pub("/vehicle_current_steering_vel", &vehicle_current_steering_vel);
+ros::Subscriber<std_msgs::Bool> emergency_stop_sub("/emergency_stop_topic", &emergency_stop_callback);
+// ros::Publisher vehicle_steering_vel_pub("/vehicle_current_steering_vel", &vehicle_current_steering_vel);
 
 
 
@@ -201,11 +212,19 @@ void loop()
     pwm_L = 0;
     pwm_R = 0;
   }
- // Send PWM commands to the motors
-  pwm_output_ctr(pwm_L, LEFT_MOTOR_ID);
-  pwm_output_ctr(pwm_R, RIGHT_MOTOR_ID);
-  sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
-  
+   
+  if (emergency_stop_command == True)
+  {
+    pwm_output_ctr(0, LEFT_MOTOR_ID);
+    pwm_output_ctr(0, RIGHT_MOTOR_ID)
+  }
+  else
+  {
+    pwm_output_ctr(pwm_L, LEFT_MOTOR_ID);  // Send PWM commands to the motors
+    pwm_output_ctr(pwm_R, RIGHT_MOTOR_ID);
+    sms_sts.WritePosEx(1, wheel_ctr.target_position, 0, 0);
+  }
+
   nh.spinOnce();
   delay(10);
 }

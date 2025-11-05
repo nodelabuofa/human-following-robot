@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
 # """
-# Image-Based Visual Servoing Controller Node
-# Computes velocity commands based on visual feature error
+# Computes velocity commands based on visual servo error
+# Publishes emergency stop command from MSI gaming controller
 # """
 
 import rospy
 
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 
 import numpy as np
 
@@ -22,7 +23,7 @@ class UpdatedTwistPub:
 
         # publish to updated_twist_topic
         self.updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
-        self.error_pub = rospy.Publisher('/servo_error_topic', Float32MultiArray, queue_size=10 )
+        self.error_pub = rospy.Publisher('/servo_error_topic', Float32MultiArray, queue_size=10)
 
         # ArUco must be in particular orientation
         self.desired_corners = {
@@ -147,6 +148,7 @@ class UpdatedTwistPub:
     
     def run(self):
         rospy.spin()
+
 
 if __name__ == '__main__':
     try:
