@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 ArUco Marker Detection Node
 Detects ArUco markers and publishes corner positions to 'aruco-corners-topic'
@@ -15,6 +17,7 @@ class ArucoCornersPub:
 
         # aruco corners publisher
         self.aruco_corners_pub = rospy.Publisher('aruco_corners_topic', Float32MultiArray, queue_size=10)
+        self.annotated_image_pub = rospy.Publisher('annotated_image_topic', Image, queue_size=10)
 
         # zed mini subscriber
         self.RGB_sub = rospy.Subscriber('/zedm/zed_node/left/image_rect_color', Image, self.RGB_callback) 
@@ -33,6 +36,14 @@ class ArucoCornersPub:
         self.aruco_params.minMarkerDistanceRate = 0.025
         # Can also adjust errorCorrectionRate, minMarkerPerimeterRate, etc.
 
+        # ArUco must be in particular orientation
+        self.desired_corners = {
+            0: {'u': -100.0, 'v': 150.0},  # Target for top left corner
+            1: {'u': 90, 'v': 150.0},   # Target for top right corner
+            2: {'u': 90, 'v': -50},    # Target for bottom right corner
+            3: {'u': -100.0, 'v': -50.0}    # Target for bottom left corner
+        }
+
     def depth_callback(self, msg):
         try:
             # convert to OpenCV float32 array (depth in meters)
@@ -48,9 +59,29 @@ class ArucoCornersPub:
         # if self.depth_image is None:
         #     return # wait until depth frame available
 
+        f = 366 # focal length, UPDATE
+        rho = 0.000002 # physical individual square pixel sensor width AND height conversion
+        cx = 315
+        cy = 178
+
+        desired_pixel_corners = []
+
+        for i in range(4): # 0, 1, 2, 3
+            u_desired = self.desired_corners[i]['u']
+            v_desired = self.desired_corners[i]['v']
+
+            # only for plotting outline of desired servo position
+            u_pixel = int(u_desired + cx)
+            v_pixel = int(360 - (v_desired + cy))
+            desired_pixel_corners.append([u_pixel, v_pixel])
+
+        pts = np.array(desired_pixel_corners, np.int32)
+        pts = pts.reshape((-1, 1, 2))
+
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             # rospy.loginfo(f"Converted image shape: {cv_image.shape}, dtype: {cv_image.dtype}")
+            cv2.polylines(cv_image, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
 
             corners, ids, rejected = cv2.aruco.detectMarkers(
                 cv_image, 
@@ -88,9 +119,19 @@ class ArucoCornersPub:
             # else:
             #     rospy.loginfo("NO: No marker detected")
 
+            pts = np.array(desired_pixel_corners, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(cv_image, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
+
             # Visualize after drawing (or not drawing) the markers
             cv2.imshow("Image", cv_image)
             cv2.waitKey(1)
+
+            try:
+                annotated_image_msg = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
+                self.annotated_image_pub.publish(annotated_image_msg)
+            except Exception as e:
+                rospy.logerr(f"Failed to convert annotated image: {e}")
 
         except Exception as e:
             rospy.logerr(f"Failed to convert image: {e}")
@@ -102,7 +143,6 @@ class ArucoCornersPub:
 
 if __name__ == '__main__':
     try:
-        print("OpenCV version:", cv2.__version__)
         node = ArucoCornersPub()
         node.run()
     except rospy.ROSInterruptException:

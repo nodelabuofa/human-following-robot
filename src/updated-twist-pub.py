@@ -27,9 +27,9 @@ class UpdatedTwistPub:
 
         # ArUco must be in particular orientation
         self.desired_corners = {
-            0: {'u': -100.0, 'v': 100.0},  # Target for top left corner
-            1: {'u': 100.0, 'v': 100.0},   # Target for top right corner
-            2: {'u': 100.0, 'v': -50.0},    # Target for bottom right corner
+            0: {'u': -100.0, 'v': 150.0},  # Target for top left corner
+            1: {'u': 90, 'v': 150.0},   # Target for top right corner
+            2: {'u': 90, 'v': -50},    # Target for bottom right corner
             3: {'u': -100.0, 'v': -50.0}    # Target for bottom left corner
         }
         
@@ -56,8 +56,8 @@ class UpdatedTwistPub:
         error_vectors = []
 
         # control gain
-        steering_gain = 0.5
-        throttle_gain = -0.75
+        steering_gain = 1.75
+        throttle_gain = -0.50
 
         # unpacks (x,y,d) to (u,v,Z) for all 4 corners
         for i in range(4): # 0, 1, 2, 3
@@ -65,7 +65,7 @@ class UpdatedTwistPub:
             v_0 = aruco_corners_data[i*3 + 1]
             Z = aruco_corners_data[i*3 + 2]
             if Z == 0 or np.isnan(Z) or np.isinf(Z):
-                return
+                continue
 
             # flipping so origin at bottom right of visual feed
             v_flipped = 360 - v_0
