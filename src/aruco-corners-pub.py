@@ -14,13 +14,13 @@ from cv_bridge import CvBridge
 class ArucoCornersPub:
     def __init__(self): # constructor
         rospy.init_node('aruco_corners_pub')
-
+        
         # ArUco must be in particular orientation
         self.desired_corners = {
-            0: {'u': -130, 'v': 200.0},  # Target for top left corner
-            1: {'u': 130, 'v': 200.0},   # Target for top right corner
-            2: {'u': 150, 'v': -85},    # Target for bottom right corner
-            3: {'u': -150.0, 'v': -85.0}    # Target for bottom left corner
+            0: {'u': -150, 'v': 200.0},  # Target for top left corner
+            1: {'u': 150, 'v': 200.0},   # Target for top right corner
+            2: {'u': 130, 'v': -85},    # Target for bottom right corner
+            3: {'u': -130.0, 'v': -85.0}    # Target for bottom left corner
         }
 
         # Initialize depth image to None

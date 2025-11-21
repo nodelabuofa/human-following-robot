@@ -16,7 +16,7 @@ cd $FOLDER_NAME/$SUB_FOLDER_NAME;
 # Record all sensor topics
 TOPICS_TO_RECORD="/aruco_corners_topic\
      /updated_twist_topic\
-        /servo_error_topic\
+        /PI_tuning_topic\
         /annotated_image_topic"
 
 

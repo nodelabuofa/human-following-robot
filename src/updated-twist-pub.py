@@ -23,26 +23,26 @@ class UpdatedTwistPub:
 
         # publish to updated_twist_topic
         self.updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
-        self.error_pub = rospy.Publisher('/servo_error_topic', Float32MultiArray, queue_size=10)
-
-        self.total_latency_pub = rospy.Publisher('total_latency_topic', Float32, queue_size=10)
+        self.PI_tuning_pub = rospy.Publisher('/PI_tuning_topic', Float32MultiArray, queue_size=10)
 
 
         # ArUco must be in particular orientation
         self.desired_corners = {
-            0: {'u': -130, 'v': 200.0},  # Target for top left corner
-            1: {'u': 130, 'v': 200.0},   # Target for top right corner
-            2: {'u': 150, 'v': -85},    # Target for bottom right corner
-            3: {'u': -150.0, 'v': -85.0}    # Target for bottom left corner
+            0: {'u': -150, 'v': 200.0},  # Target for top left corner
+            1: {'u': 150, 'v': 200.0},   # Target for top right corner
+            2: {'u': 130, 'v': -85},    # Target for bottom right corner
+            3: {'u': -130.0, 'v': -85.0}    # Target for bottom left corner
         }
 
         # for PI controller
-        self.integral_sum = np.zeros(8, dtype=np.float32)
+        self.proportional_gain = 1
+
+        self.integral_error_sum = np.zeros(8, dtype=np.float32)
         self.last_time = rospy.Time.now() # kinda attribute, kinda method, when "called", executes rospy.Time.now()
         self.error_history = np.zeros((3, 8), dtype=np.float32) # 5 rows (last 5 successful detection frames) by 8 entries (8 entry long error vector)
-        self.integral_gain = 0.05 # This is the Ki gain, tune as needed
+        self.integral_gain = 0 # This is the Ki gain, tune as needed
         self.max_dt = rospy.Duration(0.15) # max time between frames to prevent integral windup
-        
+
 
     def interaction_matrix_callback(self, aruco_corners_msg):
         """
@@ -76,7 +76,7 @@ class UpdatedTwistPub:
         error_vectors = []
         corner_mask = []
         # control gain
-        steering_gain = 1.75
+        steering_gain = 1
         throttle_gain = -0.50
         DEAD_ZONE_THRESHOLD = 8  # as it gets closer
 
@@ -102,9 +102,10 @@ class UpdatedTwistPub:
             e = np.array([u_error, v_error], dtype=np.float32) # error vector for this corner
             error_vectors.append(e) # append it before dropping corners so if ArUco detected w/odepth from ZED, still adds
 
-            if Z == 0 or np.isnan(Z) or np.isinf(Z):
+            if Z == 0 or np.isnan(Z) or np.isinf(Z) or Z <= 0.1:
                 corner_mask.extend([False, False])
                 continue
+
 
             corner_mask.extend([True, True])
 
@@ -152,29 +153,44 @@ class UpdatedTwistPub:
             self.error_history[0] = scaled_error * dt.to_sec() # replaces first row (not simply top left entry) with numerical integral
 
             # Calculate the integral sum from the moving window
-            self.integral_sum = np.sum(self.error_history, axis=0) # sums them vertically
+            self.integral_error_sum = np.sum(self.error_history, axis=0) # sums them vertically
 
+         # --- Tuning Data Computation ---
+        P = self.proportional_gain * current_stacked_error
+        I = self.integral_gain * self.integral_error_sum
+
+        # Apply mask for control calculation
         active_mask = np.array(corner_mask)
-
-        # Apply the mask to the integral sum
-        masked_integral_error_sum = self.integral_sum[active_mask]
-
-        masked_current_error = current_stacked_error[active_mask]
-
-        DEAD_ZONE_THRESHOLD = 8  # as it gets closer
-        masked_current_error[np.abs(masked_current_error) < DEAD_ZONE_THRESHOLD] = 0.0
-
+        masked_P = P[active_mask]
+        masked_I = I[active_mask]
+        
         # PI control law
-        v_twist = -1 * L_stacked_inv @ (masked_current_error + self.integral_gain * masked_integral_error_sum)
+        v_twist = -1 * L_stacked_inv @ (masked_P + masked_I)
 
         updated_twist = Twist() # special geometry_msgs datatype digestible by ROS, float64
                 
         if abs(v_twist[2]) < 1e-2: # prevents division by zero and huge steering values
             updated_twist.angular.y = 0.0
         else:
-            updated_twist.angular.y = float(np.arctan(v_twist[4] * 0.1778 / v_twist[2])) * steering_gain
+            if v_twist[4] > 6: # max angular velocity of kinematic bicycle model v/L, max lin velocity is 1 m/s, wheel to wheel length 0.1778, so max omega approx 6
+                v_twist[4] = 6
+            if v_twist[4] < -6:
+                v_twist[4] = -6
 
+            updated_twist.angular.y = float(np.arctan(v_twist[4] * 0.1778 / v_twist[2])) * steering_gain
+            v_twist[4] = updated_twist.angular.y
         updated_twist.linear.z = float(v_twist[2])
+
+        # Bundle for Plotting: [P_sum, I_sum, Linear_Vel_Cmd, Angular_Vel_Cmd]
+        # We use np.nansum to treat NaNs as zero so the plot doesn't break if a marker is lost
+        tuning_msg = Float32MultiArray()
+        tuning_msg.data = [
+            float(np.nansum(np.abs(P))),      # Sum of ABSOLUTE P entries (8x1)
+            float(np.nansum(np.abs(I))),      # Sum of ABSOLUTE I entries (8x1)
+            float(v_twist[2]),        # Linear velocity (vz in camera frame)
+            float(v_twist[4])         # Angular velocity (wy in camera frame)
+        ]
+        self.PI_tuning_pub.publish(tuning_msg)
 
         # linear.x is left wheel, linear.y is right wheel
         # left is positive radian max, right is negative radian max
@@ -196,17 +212,6 @@ class UpdatedTwistPub:
 
         servo_error_msg = Float32MultiArray() # empty array datatype compatible with ROS
         servo_error_msg.data = current_stacked_error
-
-        end_timestamp = rospy.Time.now().to_sec() # the ()s are important!!! don't ask me why LOL
-
-        total_latency = end_timestamp - start_timestamp
-        total_latency_msg = Float32()
-        total_latency_msg.data = total_latency
-
-        # Remove the timestamp to get the actual corner data
-        
-        self.total_latency_pub.publish(total_latency_msg)
-        self.error_pub.publish(servo_error_msg)
 
         self.updated_twist_pub.publish(updated_twist)
         return
