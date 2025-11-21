@@ -40,7 +40,7 @@ class UpdatedTwistPub:
         self.integral_error_sum = np.zeros(8, dtype=np.float32)
         self.last_time = rospy.Time.now() # kinda attribute, kinda method, when "called", executes rospy.Time.now()
         self.error_history = np.zeros((3, 8), dtype=np.float32) # 5 rows (last 5 successful detection frames) by 8 entries (8 entry long error vector)
-        self.integral_gain = 0.1 # This is the Ki gain, tune as needed
+        self.integral_gain = 0.3 # This is the Ki gain, tune as needed
         self.max_dt = rospy.Duration(0.15) # max time between frames to prevent integral windup
 
 
@@ -77,7 +77,7 @@ class UpdatedTwistPub:
         corner_mask = []
         # control gain
         steering_gain = 1
-        throttle_gain = -0.50
+        throttle_gain = -1
         DEAD_ZONE_THRESHOLD = 8  # as it gets closer
 
         # unpacks (x,y,d) to (u,v,Z) for all 4 corners
