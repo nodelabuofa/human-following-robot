@@ -35,12 +35,12 @@ class UpdatedTwistPub:
         }
 
         # for PI controller
-        self.proportional_gain = 1
+        self.proportional_gain = 0.5
 
         self.integral_error_sum = np.zeros(8, dtype=np.float32)
         self.last_time = rospy.Time.now() # kinda attribute, kinda method, when "called", executes rospy.Time.now()
         self.error_history = np.zeros((3, 8), dtype=np.float32) # 5 rows (last 5 successful detection frames) by 8 entries (8 entry long error vector)
-        self.integral_gain = 0 # This is the Ki gain, tune as needed
+        self.integral_gain = 0.1 # This is the Ki gain, tune as needed
         self.max_dt = rospy.Duration(0.15) # max time between frames to prevent integral windup
 
 
@@ -55,10 +55,10 @@ class UpdatedTwistPub:
 
         # intrinsic ZED mini camera parameters found using rostopic echo /zedm/zed_node/left/camera_info
         # pixel resolution 960 x 540
-        f = 754 # focal length, UPDATE
+        f = 750 # focal length, UPDATE
         rho = 0.000002 # physical individual square pixel sensor width AND height conversion
-        cx = 480 # found by
-        cy = 270
+        cx = 467 # found by
+        cy = 268
 
         aruco_corners_data = np.array(aruco_corners_msg.data, dtype=np.float32)
 
@@ -181,17 +181,6 @@ class UpdatedTwistPub:
             v_twist[4] = updated_twist.angular.y
         updated_twist.linear.z = float(v_twist[2])
 
-        # Bundle for Plotting: [P_sum, I_sum, Linear_Vel_Cmd, Angular_Vel_Cmd]
-        # We use np.nansum to treat NaNs as zero so the plot doesn't break if a marker is lost
-        tuning_msg = Float32MultiArray()
-        tuning_msg.data = [
-            float(np.nansum(np.abs(P))),      # Sum of ABSOLUTE P entries (8x1)
-            float(np.nansum(np.abs(I))),      # Sum of ABSOLUTE I entries (8x1)
-            float(v_twist[2]),        # Linear velocity (vz in camera frame)
-            float(v_twist[4])         # Angular velocity (wy in camera frame)
-        ]
-        self.PI_tuning_pub.publish(tuning_msg)
-
         # linear.x is left wheel, linear.y is right wheel
         # left is positive radian max, right is negative radian max
         # 0.1778 is vehicle length (wheel center to center), 0.1667 wheelbase (rear tires, tread center to center)
@@ -210,8 +199,15 @@ class UpdatedTwistPub:
                 updated_twist.linear.x = float(v_twist[2] * throttle_gain) # outer (left) wheel has max velocity
                 updated_twist.linear.y = float(float(v_twist[2]) * ackerman_differential_ratio * throttle_gain)
 
-        servo_error_msg = Float32MultiArray() # empty array datatype compatible with ROS
-        servo_error_msg.data = current_stacked_error
+        # bundle for plotting: [P_sum, I_sum, Linear_Vel_Cmd, Angular_Vel_Cmd]
+        tuning_msg = Float32MultiArray()
+        tuning_msg.data = [
+            float(np.nansum(np.abs(P))),      # absolute sum of P entries (8x1)
+            float(np.nansum(np.abs(I))),      # absolute sum of I entries (8x1)
+            float(v_twist[2] * throttle_gain),        # Linear velocity (vz in camera frame)
+            float(v_twist[4])         # Angular velocity (omega_y in camera frame)
+        ]
+        self.PI_tuning_pub.publish(tuning_msg)
 
         self.updated_twist_pub.publish(updated_twist)
         return
