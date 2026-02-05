@@ -27,8 +27,8 @@ The PID feedback controller **relates motion** of QR code's corners **in the vid
 
 <table width="100%">
   <tr>
-    <th>Visual Servoing</th>
-    <th>System Output</th>
+    <th>Image Base Visual Servoing</th>
+    <th>Test Run Plotted</th>
   </tr>
   <tr>
     <td width="50%">
