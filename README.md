@@ -10,7 +10,7 @@ Following a human is a useful skill for robots, but implementing this on small, 
 # Solution
 
 1. Use QR/ArUco codes to find and track people instead
-2. **Use 'where they are' - 'where they should be' as the error, no mapping needed!**
+3. **Use 'where they are' - 'where they should be' as the error, no mapping or depth needed!**
 
 ![Visual Servoing Diagram](images/visual-servoing.png)
 
