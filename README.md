@@ -1,33 +1,34 @@
-# ArUco-Course-Correction
+# Problem Statement
 
-How do we drive without depth sensing LiDAR in our eyes? 
+Following a human is a useful skill for robots, but implementing this on small, low-cost platforms has 4 challenges:
 
-We have a pinhole stereo camera (2 eyes) that perceives depth with trigonometry. We also know where the lane divider, curb, and other landmarks should be when driving straight, turning left across an intersection, etc.
+1. Finding the person; human appearance changes with orientation, distance and lighting.
+2. Locking onto them as they walk behind things and reappear
+3. Estimating position without depth cameras or LiDAR is mathematically ambiguous.
+4. Trajectory planning and environment mapping with constraints on compute
 
-We then use these two to correct our throttle and steering, making imperfect linear corrections, correcting in small timesteps, until eventually we're back to the desired path.
+# Solution
 
-That's what I'm trying to make an RC car do. In short, I'm developing an image based visual servoing PID controller to adhere to a spontaneous path from a LiDAR-based motion planner, or follow somebody.
+1. Use QR/ArUco codes to find and track people instead
+2. **Use 'where they are' - 'where they should be' as the error, no mapping needed!**
 
-I programmed this with:
-- ROS1 Noetic
-- C++
-- Python
+![Visual Servoing Diagram](visual-servoing.png)
 
-for an RC car equipped with:
-- ESP32
-- Jetson
-- ZED Mini stereo camera
-- RoboSense Airy LiDAR. 
+The PID feedback controller relates motion of QR code's corners in the video feed to the car's motion in real life. 
 
-I'm using ArUco/QR codes to standardize landmarks, and the OpenCV open source computer vision library to detect corners of the markers.
+![Interaction Matrix](motion.png)
 
+The derivation is clever, I've explained it simply, assuming no background; feel free to see my notes in ./Notes.
 
 
+# Results
 
-# Technical Background
+![PID IBVS Controller](output.gif)
 
-We make a linear approximation that the change in the visual feed, in a small timestep, can be described with a linear transformation.
 
-This allows us to use, in essence, the Jacobian matrix to relate the motion of the coordinates of the Aruco corners in the pixel frame with the 'Twist' (v_x, v_y, v_z, w_x, w_y, w_z) vector of the vehicle.
+### Key Challenges
 
-The main challenge is the fact I don't have a drone with 6 degrees of freedom. I have an Ackerman steering based car, and I'm trying to use nullspace projection to effectively course correct with only 2 degrees of freedom (throttle and steering)
+Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
+
+
+
