@@ -24,7 +24,22 @@ The PID feedback controller **relates motion** of QR code's corners **in the vid
 
 # Results
 
-![PID IBVS Controller](images/output.gif)
+
+<table width="100%">
+  <tr>
+    <th>Visual Servoing</th>
+    <th>System Output</th>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="images/servo.gif" alt="Visual Servoing" />
+    </td>
+    <td width="50%">
+      <img src="images/output.gif" alt="System Output" />
+    </td>
+  </tr>
+</table>
+
 
 # Implementation
 
