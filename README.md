@@ -70,7 +70,7 @@ roslaunch aruco_course_correction aruco.launch
 
 Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
 
-[challenges](images/challenges.png)
+![challenges](images/challenges.png)
 
 
 
