@@ -39,14 +39,23 @@ The PID feedback controller **relates motion** of QR code's corners **in the vid
 # gaming controller/joystick and ROSserial dependencies
 sudo apt install ros-noetic-joy ros-noetic-rosserial-python
 
+# clone and build
+git clone https://github.com/nodelabuofa/aruco-course-correction.git
+cd ..
+catkin_make
+source devel/setup.bash
+
 # Run visual servoing pipeline
 roslaunch aruco_course_correction aruco.launch
+```
 
 
 
 ### Key Challenges
 
 Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
+
+[challenges](challenges.png)
 
 
 
