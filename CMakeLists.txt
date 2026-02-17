@@ -19,8 +19,8 @@ catkin_package(
 ## Install Python executables
 ## This makes sure scripts are executable and use correct Python interpreter
 catkin_install_python(PROGRAMS
-  src/aruco-corners-pub.py
-  src/updated-twist-pub.py
+  src/aruco_corners_finder.py
+  src/visual_error_controller.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -28,11 +28,6 @@ catkin_install_python(PROGRAMS
 install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
   PATTERN ".svn" EXCLUDE
-)
-
-add_message_files(
-  FILES
-  ArucoCorners.msg
 )
 
 generate_messages(

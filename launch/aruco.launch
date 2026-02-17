@@ -6,14 +6,14 @@
   <!-- Node to run the rosserial_python serial_node.py -->
   <node name="serial_node" pkg="rosserial_python" type="serial_node.py" output="screen">
     <param name="port" value="$(arg port)" />
-  </node>4
+  </node>
   
   <!-- Node for the vehicle steering angle + velocity control -->
-  <node name="aruco_corners_node" pkg="aruco-course-correction" type="aruco-corners-pub.py" output="screen">
+  <node name="aruco_corners_node" pkg="human-following-robot" type="aruco_corners_finder.py" output="screen">
   </node>
   
   <!-- Node for getting the vehicle's current twist -->
-  <node name="updated_twist_node" pkg="aruco-course-correction" type="updated-twist-pub.py" output="screen">
+  <node name="updated_twist_node" pkg="human-following-robot" type="visual_error_controller.py" output="screen">
   </node>
 
 
@@ -21,6 +21,6 @@
   </node>
     
   <!-- Node for gaming controller L1 button emergency stop -->
-  <node name="emergency_stop_pub" pkg="aruco-course-correction" type="emergency-stop-pub.py" output="screen">
+  <node name="emergency_stop_node" pkg="human-following-robot" type="emergency_stop.py" output="screen">
   </node>
 </launch>
