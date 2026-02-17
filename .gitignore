@@ -1,0 +1,18 @@
+# IDE settings
+.vscode/
+
+# all ROS bags and processed 
+*.bag
+data/**/*.csv
+*.csv
+
+# keep folder structure
+!data/**/.gitkeep
+
+# ROS build, in case I start using C/C++
+build/
+devel/
+install/
+logs/
+.catkin_workspace
+.catkin_tools/
