@@ -1,17 +1,116 @@
 #!/usr/bin/env python3
 
-# """
-# Computes velocity commands based on visual servo error
-# Publishes emergency stop command from MSI gaming controller
-# """
-
+"""
+Computes steering and throttle commands 
+based on where the QR/ArUco code is vs. where it should be
+"""
 import rospy
 
 from std_msgs.msg import Float32MultiArray, Float32
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool
-
 import numpy as np
+
+import library as lib # my custom library
+
+## GLOBALS/CONFIG
+camera_config = lib.CameraConfig()
+controller_config = lib.ControllerConfig()
+desired_corners = lib.DESIRED_CORNERS
+
+current_time = None
+last_time = None
+max_dt = rospy.Duration(0.15)
+error_history = np.zeros((3, 8), dtype=np.float32) # stores visual error history of last 3 frames
+integral_error_sum = np.zeros(8, dtype=np.float32)
+
+# global so helper functions can access
+aruco_corners_sub = None
+updated_twist_pub = None
+PID_tuning_pub = None
+
+
+
+def main():
+    global aruco_corners_sub, updated_twist_pub, PID_tuning_pub
+    rospy.init_node('visual_error_controller')
+
+    aruco_corners_sub = rospy.Subscriber('aruco_corners_topic', Float32MultiArray, interaction_matrix_callback)
+    
+    updated_twist_pub = rospy.Publisher('/updated_twist_topic', Twist, queue_size=10)
+    PID_tuning_pub = rospy.Publisher('/PI_tuning_topic', Float32MultiArray, queue_size=10)
+
+    rospy.loginfo("Visual Error Controller running")
+    rospy.spin() # run forever
+
+
+### CALLBACKS (when you get mail, ring my doorbell)
+
+
+# relates motion of QR code in video frame to motion in real world
+def interaction_matrix_callback(aruco_corners_msg): 
+    global camera_config, last_time, current_time, max_dt, error_history, integral_error_sum, controller_config, updated_twist_pub, PID_tuning_pub
+
+    aruco_corners_array = np.array(aruco_corners_msg.data, dtype=np.float32) # convert from Float32MultiArray back to numpy array
+    
+    corners_mask, interaction_matrices, errors = [], [], []
+    for i in range(4): # 0, 1, 2, 3
+        error, depth, skip = lib.compute_unpack_errors(
+            i, aruco_corners_array, desired_corners, camera_config)
+        if skip == False:
+            interaction_matrix = lib.compute_interaction_matrix(error, depth, camera_config)
+
+            errors.append(error)
+            interaction_matrices.append(interaction_matrix)
+
+    stacked_interaction_matrices = np.vstack(interaction_matrices) # shape: (8,6)
+    current_stacked_errors = np.concatenate(errors) # shape: (8,1)
+
+    current_time = rospy.Time.now()
+    dt = current_time - last_time # ie. \Delta t
+    last_time = current_time # changes for next loop
+
+    if dt < max_dt:
+        # Roll the history array down to make space for the new error
+        error_history = np.roll(error_history, shift=1, axis=0) # shifts vertically (axis=0) down 1 row, bringing bottom (5 frame old error vector) to top
+        # Add the new error to the top of the history
+        error_history[0] = current_stacked_errors * dt.to_sec() # replaces first row (not simply top left entry) with numerical integral
+
+        # Calculate the integral sum from the moving window
+        integral_error_sum = np.sum(error_history, axis=0) # sums them vertically
+
+    
+    P = controller_config.proportional_gain * current_stacked_errors
+    I = controller_config.integral_gain * integral_error_sum
+
+    inverse_stacked_interaction_matrices = np.linalg.pinv(stacked_interaction_matrices) # shape: (6,8)
+
+    # v_twist is 6DOF linear + angular velocity vector [v_x, v_y, v_z, \omega_x, \omega_y, \omega_z]
+    v_twist = -1 * inverse_stacked_interaction_matrices @ (P + I) # matrix vector multiplication
+    updated_twist = Twist()
+
+    updated_twist = lib.differential_wheel_speed(v_twist, updated_twist, controller_config)
+    updated_twist_pub.publish(updated_twist)
+
+    # bundle for plotting: [P_sum, I_sum, Linear_Vel_Cmd, Angular_Vel_Cmd]
+    tuning_msg = Float32MultiArray()
+    tuning_msg.data = [
+        float(np.nansum(np.abs(P))),      # absolute sum of P entries (8x1)
+        float(np.nansum(np.abs(I))),      # absolute sum of I entries (8x1)
+        float(v_twist[2] * controller_config.throttle_gain),        # Linear velocity (vz in camera frame)
+        float(updated_twist.angular.y)         # Angular velocity (omega_y in camera frame)
+    ]
+    PID_tuning_pub.publish(tuning_msg)
+    
+try:
+    main()
+except rospy.ROSInterruptException:
+    pass
+
+
+
+#### OLD OBJECT ORIENTED CODE
+
 
 class UpdatedTwistPub:
     def __init__(self):
@@ -53,20 +152,6 @@ class UpdatedTwistPub:
         Returns:
         """
 
-        # intrinsic ZED mini camera parameters found using rostopic echo /zedm/zed_node/left/camera_info
-        # pixel resolution 960 x 540
-        f = 750 # focal length, UPDATE
-        rho = 0.000002 # physical individual square pixel sensor width AND height conversion
-        cx = 467 # found by
-        cy = 268
-
-        aruco_corners_data = np.array(aruco_corners_msg.data, dtype=np.float32)
-
-        # Extract the original timestamp from the message
-        start_timestamp = aruco_corners_data[0]
-        aruco_corners_data = aruco_corners_data[1:] # remove timestamp so can process properly
-        # rospy.loginfo(f'Pseudo Inverse of Interaction Matrix L:\n{L_inv}')
-
         # how much time has passed (used for simple numerical integration for PI later)
         current_time = rospy.Time.now()
         dt = current_time - self.last_time # ie. \Delta t
@@ -79,6 +164,8 @@ class UpdatedTwistPub:
         steering_gain = 1
         throttle_gain = -1
         DEAD_ZONE_THRESHOLD = 8  # as it gets closer
+
+        aruco_corners_data = np.array(aruco_corners_msg.data, dtype=np.float32) # convert from Float32MultiArray back to numpy array
 
         # unpacks (x,y,d) to (u,v,Z) for all 4 corners
         for i in range(4): # 0, 1, 2, 3
@@ -205,7 +292,7 @@ class UpdatedTwistPub:
             float(np.nansum(np.abs(P))),      # absolute sum of P entries (8x1)
             float(np.nansum(np.abs(I))),      # absolute sum of I entries (8x1)
             float(v_twist[2] * throttle_gain),        # Linear velocity (vz in camera frame)
-            float(v_twist[4])         # Angular velocity (omega_y in camera frame)
+            float(updated_twist.angular.y)         # Angular velocity (omega_y in camera frame)
         ]
         self.PI_tuning_pub.publish(tuning_msg)
 

@@ -16,15 +16,15 @@ import library as lib # my custom library(.py) file with functions and config pa
 camera_config = lib.CameraConfig()
 cv_bridge = CvBridge() # converts color/RGB and depth arrays to digestible format for OpenCV
 
+desired_corners = lib.DESIRED_CORNERS
+
 aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50) # 5x5 black/white square size ArUco/QR code, ID < 50
 aruco_params = lib.get_aruco_parameters()
-
-desired_corners = lib.DESIRED_CORNERS
 
 depth_image = None
 color_image = None
 
-# to allow helper functions to access
+# global to allow helper functions to access
 aruco_corners_pub = None
 annotated_image_pub = None
 
