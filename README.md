@@ -21,7 +21,9 @@ Following a human is a useful skill for robots, but implementing a solution with
 
 ![Visual Servoing Diagram](docs/images/visual-servoing.png)
 
-This is called [**Image Based Visual Servoing**](docs/visual_error_background_slides.pdf). It's how humans drive/function without depth-scanning laser eyes; I know where the lane divider should be, see where it is, and linearly adjust my steering and throttle accordingly.
+# Analogy
+
+This is exactly how humans drive/function without depth-scanning laser eyes! I know where the lane divider should be, see where it is, and linearly adjust my steering and throttle accordingly. This is called  [**Image Based Visual Servoing**](docs/visual_error_background_slides.pdf). 
 
 # Background
 
