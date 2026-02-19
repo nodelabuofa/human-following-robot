@@ -57,6 +57,10 @@ The PID feedback controller **relates motion** of QR code's corners **in the vid
 
 # Implementation
 
+## Circuit
+
+![Circuit](docs/images/circuit.png)
+
 ## Dependencies
 - ROS1 Noetic (Ubuntu 20.04)
 - Python 3 with 'numpy', 'opencv'
