@@ -1,9 +1,12 @@
 # Visual Error Controller
 
-**Nutshell**: Simple, fast, but physically unrealistic
+**Nutshell**: simple, fast, but physically unrealistic
 
-**Goal**: Baseline feedback controller
+**Goal**: baseline feedback controller
 
+**Significance**: no position estimation needed
+
+**Progress**: complete
 
 # Problem Statement
 
