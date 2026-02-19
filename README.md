@@ -3,7 +3,7 @@
 **Goal**: shadow human, face them at fixed distance (0.2m) when they stop
 
 
-**Nutshell**: plans trajectory over multiple time steps, aware of motion constraints.
+**Nutshell**: plans trajectory over multiple time steps considering motion constraints.
 
 
 **Significance**: intelligent, behaviour tunable, robust.
@@ -14,28 +14,44 @@
 
 # The Upgrade
 
-Visual error controller thought the car could jump left/right and go at Mach speed. This **predictive planner and controller** is actually aware of the car's kinematic model and control constraints.
+ The visual error controller thought the car could jump left/right and go at Mach speed. This **predictive planner and controller** is actually aware of the car's kinematic model and control constraints.
 
-# Problem Statement  
+![Visual Error Challenges](docs/images/servo_challenges.png)
 
-Looking under the hood, we're minimizing control effort and tracking error. Penalty tuning needed to balance lazy response with aggressive overshooting.
+# Solution  
 
-More specifically, this is a Linear Model Predictive Controller. I linearize to simplify how sine/cosine/tangent vary nonlinearly.
+As with most control-theory, we have a setpoint to reach. Uniquely, MPC manages planning future actions and implementing the feedback in one  (slight oversimplification).
 
-sequenceDiagram
-    participant T as Time (t)
-    participant P as Planner (Optimizer)
-    participant R as Robot (Hardware)
-    
-    Note over T,R: The Receding Horizon Loop
-    
-    T->>P: 1. Current State (x, y, v)
-    P->>P: 2. Predict next N steps<br/>(Minimize Cost J)
-    P->>R: 3. Execute ONLY 1st Step (u0)
-    R->>R: 4. Move (Physics happens)
-    R->>T: 5. New State (Error/Noise added)
-    
-    Note over T,R: Repeat loop at t+1
+![MPC Problem Statement](docs/images/problem_statement.png)
+
+Penalty tuning is needed to balance lazy response with aggressive overshooting.
+
+### Analogy
+
+Imagine you're driving down a windy road in thick fog. You:
+
+1. Only see, and make a plan for, 50 meters ahead (prediction horizon).
+
+2. Turn the wheel to start along that path; car moves forward 1 meter
+
+3. You don't blindly follow the rest of the 49-meter plan. You look again, seeing a new 50 meters, and replan
+
+
+
+# Background 
+
+This is called a Linear Time Varying Model Predictive Controller. We linearize as follows, to simplify the nonlinear variation of sine, cosine and tangent:
+
+![MPC Kinematic Model](docs/images/linearized_state_space_model.png)
+
+See my [notes package](docs/Derivation.pdf) notes for a simple, clever derivation!
+
+
+# Implementation
+
+One ROS1 node estimates position to the ArUco/QR code, the other 
+
+
 
 
 
