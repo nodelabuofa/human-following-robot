@@ -1,76 +1,18 @@
-# Problem Statement
+# Motion Planner with Residual RL for Behavioural Tuning
 
-Following a human is a useful skill for robots, but implementing this on small, low-cost platforms has 4 challenges:
 
-1. Finding the person; human appearance changes with orientation, distance and lighting.
-2. Locking onto them as they walk behind things and reappear
-3. Estimating position without depth cameras or LiDAR is mathematically ambiguous.
-4. Trajectory planning and environment mapping with constraints on compute
+**Nutshell**: dynamically corrects behaviour of MPC, accounting for inaccuracy of simplified **kinematic** (trig) model
 
-# Solution
 
-1. Use QR/ArUco codes to find and track people instead
-3. **Use 'where they are' - 'where they should be' as the error, no mapping or depth needed!**
+**Significance**: handles unmodeled **dynamics** (physics) (tire slip, lateral forces, suspension effects, etc.) without explicit physics-based modelling
 
-![Visual Servoing Diagram](images/visual-servoing.png)
+
+**Progress**: will develop after MPC
+
 
 # Background
 
-The PID feedback controller **relates motion** of QR code's corners **in the video feed to the car's motion in real life**. 
+The residual RL outputs a suggested control correction of its own that's simply scaled and added/subtracted with the MPC's control action
 
-![Interaction Matrix](images/motion.png)
-
-**See my [notes package](Notes.pdf) notes for a simple, clever derivation!**
-
-# Results
-
-
-<table width="100%">
-  <tr>
-    <th>Image Base Visual Servoing</th>
-    <th>Test Run Plotted</th>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="images/servo.gif" alt="Image Based Visual Servoing" />
-    </td>
-    <td width="50%">
-      <img src="images/output.gif" alt="Plotting" />
-    </td>
-  </tr>
-</table>
-
-
-# Implementation
-
-## Dependencies
-- ROS1 Noetic (Ubuntu 20.04)
-- Python 3 with 'numpy', 'opencv'
-- ZED SDK (for ZED Mini camera)
-- 'rosserial' (for interfacing microcontroller with ROS messages)
-
-
-```bash
-# gaming controller/joystick and ROSserial dependencies
-sudo apt install ros-noetic-joy ros-noetic-rosserial-python
-
-# clone and build
-git clone https://github.com/nodelabuofa/aruco-course-correction.git
-cd ..
-catkin_make
-source devel/setup.bash
-
-# Run visual servoing pipeline
-roslaunch aruco_course_correction aruco.launch
-```
-
-
-
-### Key Challenges
-
-Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
-
-![challenges](images/challenges.png)
-
-
+![MPC](docs/images/mpc_rl.png)
 
