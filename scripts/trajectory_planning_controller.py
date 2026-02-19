@@ -26,7 +26,7 @@ DT         = 0.1      # fixed time step [s]
 L          = 0.167    # wheel-to-wheel-distance
 
 V_MAX      =  1.0     # max forward velocity [m/s]
-V_MIN      = -1.0     # min velocity (negative = reverse)
+V_MIN      = -1.0     # min velocity 
 DELTA_MAX  =  0.45    # max steering angle [rad]  (~25 degrees)
 DELTA_MIN  = -0.45
 
@@ -252,7 +252,7 @@ def solve_mpc():
 
 
 ###ROS CALLBACKS
-def pose_callback(msg):
+def pose_callback(msg): # msg is a Float32MultiArray
     # gets ArUco pose, updates and triggers new MPC solve
     global current_state
 
@@ -260,6 +260,7 @@ def pose_callback(msg):
         rospy.logwarn("[MPC] pose_callback: incomplete data (got %d values, need 3).", len(msg.data))
         return
 
+    # don't need to convert to numpy array, just extract
     x_lat  = float(msg.data[0])
     y_long = float(msg.data[1])
     theta  = np.radians(float(msg.data[2]))   # degrees → radians
