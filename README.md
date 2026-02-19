@@ -20,7 +20,11 @@
 
 # Solution  
 
-As with most control-theory, we have a setpoint to reach. Uniquely, MPC manages planning future actions and implementing the feedback in one  (slight oversimplification).
+As with most control-theory, we have a setpoint to reach. Uniquely, MPC manages planning future actions and implementing the feedback in one (slight oversimplification).
+
+![MPC gif](docs/images/MPC_plot.gif)
+
+### Cost Function Formulation
 
 ![MPC Problem Statement](docs/images/problem_statement.png)
 
