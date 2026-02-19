@@ -16,7 +16,7 @@
 
  The visual error controller thought the car could jump left/right and go at Mach speed. This **predictive planner and controller** is actually aware of the car's kinematic model and control constraints.
 
-![Visual Error Challenges](docs/images/servo_challenges.png)
+![Visual Error Challenges](docs/images/challenges.png)
 
 # Solution  
 
