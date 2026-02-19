@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(aruco-course-correction)
+project(human-following-robot)
 
 
 
@@ -11,6 +11,11 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
 ## Declare a catkin package
 catkin_package(
   CATKIN_DEPENDS rospy geometry_msgs std_msgs message_runtime
@@ -19,8 +24,9 @@ catkin_package(
 ## Install Python executables
 ## This makes sure scripts are executable and use correct Python interpreter
 catkin_install_python(PROGRAMS
-  src/aruco_corners_finder.py
-  src/visual_error_controller.py
+  scripts/aruco_corners_finder.py
+  scripts/visual_error_controller.py
+  scripts/emergency_stop.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -30,10 +36,7 @@ install(DIRECTORY launch/
   PATTERN ".svn" EXCLUDE
 )
 
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-)
+
 
 # set(OpenCV_DIR "/opt/opencv-4.5.4/lib/cmake/opencv4")
 

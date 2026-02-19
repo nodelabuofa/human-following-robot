@@ -9,7 +9,7 @@ import numpy as np
 from std_msgs.msg import Float32MultiArray, Header # for ROS topic transportation
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-import library as lib # my custom library(.py) file with functions and config params
+from human_following_robot import library as lib # my custom library(.py) file with functions and config params
 
 
 ## GLOBALS/CONFIG

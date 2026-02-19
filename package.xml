@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>aruco-course-correction</name>
+  <name>human-following-robot</name>
   <version>0.0.0</version>
   <description>ArUco marker detection and visual servoing for RC car course correction</description>
 

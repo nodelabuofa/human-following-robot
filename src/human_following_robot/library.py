@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import cv2
 import numpy as np
 from dataclasses import dataclass
@@ -23,7 +25,7 @@ class ControllerConfig:
     max_angular_velocity: float = 6.0
     vehicle_length: float = 0.1778  # wheel center to center
     wheelbase: float = 0.1667       # rear tires, tread center to center
-    integral_history_size: int = 3  # frames to keep in history
+    integral_history_size: int = 3 # frames to keep in history
 
 # shared ArUco 'reference'/ground truth
 DESIRED_CORNERS = {
@@ -70,6 +72,11 @@ def compute_interaction_matrix(error_param, depth_param, camera_config_param: Ca
 def compute_unpack_errors(
             i_param, aruco_corners_array_param, desired_corners_param, 
             camera_config_param: CameraConfig):
+    
+    # if corner isn't detected, return zero error and skip it
+    if len(aruco_corners_array_param) < (i_param + 1) * 3:
+        return np.zeros(2, dtype=np.float32), 0.0, True
+
     u_0 = aruco_corners_array_param[i_param*3 + 0]
     v_0 = aruco_corners_array_param[i_param*3 + 1]
     Z = aruco_corners_array_param[i_param*3 + 2]
@@ -88,11 +95,11 @@ def compute_unpack_errors(
     v_error = v - v_desired
 
     error = np.array([u_error, v_error], dtype=np.float32) # error vector for this corner
-    skip = None
+    
     if Z == 0 or np.isnan(Z) or np.isinf(Z) or Z <= 0.1:
-        skip = False
-    else: 
         skip = True
+    else: 
+        skip = False
 
     return error, Z, skip
 
