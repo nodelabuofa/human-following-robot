@@ -1,8 +1,11 @@
 # Trajectory Planning Controller
 
 **Goal**: shadow human, face them at fixed distance (0.2m) when they stop
+
 **Nutshell**: Plans a trajectory over multiple time steps, aware of motion constraints.
+
 **Significance**: Intelligent, behaviour tunable, robust.
+
 **Progress**: Developing for deployment
 
 
