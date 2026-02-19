@@ -16,3 +16,10 @@ The residual RL outputs a suggested control correction of its own that's simply 
 
 ![MPC](docs/images/mpc_rl.png)
 
+
+# Implementation
+
+I'll cross this bridge when I get to it lol.
+
+![deployment](docs/images/training_deployment.png)
+
