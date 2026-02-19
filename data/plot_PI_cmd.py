@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 import numpy as np
+# --- PATCH FOR NUMPY DEPRECATION ISSUES ---
+try:
+    np.bool = np.bool_
+except AttributeError:
+    np.bool = bool
+try:
+    np.object = np.object_
+except AttributeError:
+    np.object = object
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
@@ -10,13 +19,13 @@ tune_csv = 'PI_tuning.csv'
 corners_csv = 'aruco_corners.csv'
 
 # Same constants and function as before
-CX, CY = 467, 268
-RES_W, RES_H = 960, 540
+CX, CY = 933, 536
+RES_W, RES_H = 1920, 1080
 DESIRED_CORNERS_REL = {
-    0: {'u': -150, 'v': 200.0},
-    1: {'u': 150, 'v': 200.0},
-    2: {'u': 130, 'v': -85},
-    3: {'u': -130.0, 'v': -85.0}
+    0: {'u': -300, 'v': 400.0},  # Target for top left corner
+    1: {'u': 300, 'v': 400.0},   # Target for top right corner
+    2: {'u': 260, 'v': -170},    # Target for bottom right corner
+    3: {'u': -260.0, 'v': -170}    # Target for bottom left corner
 }
 
 def get_raw_desired_pixels():
@@ -68,14 +77,31 @@ def load_and_visualize(tune_csv, corners_csv):
     ax_err.legend(loc='upper right')
     ax_err.grid(True)
 
+    # --- Controller Commands with dual y-axes ---
     ax_cmd = fig.add_subplot(gs[2, :], sharex=ax_err)
-    ax_cmd.plot(df_merged['time'], df_merged['Linear_Cmd'], 'g-', label='Linear (m/s)', alpha=0.6)
-    ax_cmd.plot(df_merged['time'], df_merged['Angular_Cmd'], 'r-', label='Angular (rad/s)', alpha=0.6)
-    line_cmd = ax_cmd.axvline(x=0, color='red', linestyle='--')
-    ax_cmd.set_ylabel('Twist Cmd')
+
+    # Left y-axis: linear velocity
+    line_lin, = ax_cmd.plot(df_merged['time'], df_merged['Linear_Cmd'],
+                            'g-', label='Linear (m/s)', alpha=0.6)
+    ax_cmd.set_ylabel('Linear Cmd (m/s)', color='g')
+    ax_cmd.tick_params(axis='y', labelcolor='g')
     ax_cmd.set_xlabel('Time (s)')
-    ax_cmd.legend(loc='upper right')
     ax_cmd.grid(True)
+
+    # Right y-axis: angular velocity
+    ax_cmd2 = ax_cmd.twinx()
+    line_ang, = ax_cmd2.plot(df_merged['time'], df_merged['Angular_Cmd'],
+                             'r-', label='Angular (rad/s)', alpha=0.6)
+    ax_cmd2.set_ylabel('Angular Cmd (rad/s)', color='r')
+    ax_cmd2.tick_params(axis='y', labelcolor='r')
+
+    # Shared vertical cursor (same x on both axes)
+    line_cmd = ax_cmd.axvline(x=0, color='k', linestyle='--')
+
+    # Combined legend from both axes
+    lines = [line_lin, line_ang]
+    labels = [l.get_label() for l in lines]
+    ax_cmd.legend(lines, labels, loc='upper right')
 
     plt.subplots_adjust(bottom=0.15)
     ax_slider = plt.axes([0.15, 0.02, 0.7, 0.03])
