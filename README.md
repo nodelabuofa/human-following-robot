@@ -5,7 +5,7 @@
 **Goal**: Baseline feedback controller
 
 
-### Problem Statement
+# Problem Statement
 
 Following a human is a useful skill for robots, but implementing a solution with reasonable latency on small, low-cost platforms has 4 challenges
 
