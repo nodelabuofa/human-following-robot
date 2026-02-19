@@ -1,76 +1,65 @@
-# Problem Statement
+# Human-Following Robot: LTV-MPC Trajectory Planning
 
-Following a human is a useful skill for robots, but implementing this on small, low-cost platforms has 4 challenges:
+This project implements an autonomous human-following system for a car-like robot. The core of this branch is the transition from a reactive **Visual Servoing** approach to a **Linear Time-Varying Model Predictive Controller (LTV-MPC)**, allowing for smoother, more natural motion that respects the physical constraints of the robot.
 
-1. Finding the person; human appearance changes with orientation, distance and lighting.
-2. Locking onto them as they walk behind things and reappear
-3. Estimating position without depth cameras or LiDAR is mathematically ambiguous.
-4. Trajectory planning and environment mapping with constraints on compute
+## 🎯 The Goal
+The robot must follow a human at a fixed distance (0.2m) and orientation, effectively "shadowing" their movements.
 
-# Solution
+---
 
-1. Use QR/ArUco codes to find and track people instead
-3. **Use 'where they are' - 'where they should be' as the error, no mapping or depth needed!**
+## 🔄 The Technical Evolution
 
-![Visual Servoing Diagram](images/visual-servoing.png)
+### From Visual Servoing (Reactive)
+Our previous method used **Image-Based Visual Servoing (IBVS)**. It calculated an "error" based on how the ArUco marker appeared in the camera frame and tried to minimize it instantly.
+*   **The Problem:** It assumed the robot could move sideways (holonomic) and lacked a "memory" of the robot's momentum or future path.
+*   **See [Problem Statement.pdf](docs/Problem%20Statement.pdf)** for the original challenges.
 
-# Background
+### To LTV-MPC (Predictive)
+The new **LTV-MPC** approach looks ahead 1 second into the future (10 steps of 0.1s). Every time the robot gets a new position from the camera, it solves an optimization problem to find the best sequence of steering and speed.
+*   **Why LTV?** Since the robot's motion is non-linear (it turns in curves), we **linearize** the model around its current speed and heading every step. This makes the math simple enough to solve in real-time.
+*   **The Result:** The robot "anticipates" curves and slows down or speeds up gracefully.
 
-The PID feedback controller **relates motion** of QR code's corners **in the video feed to the car's motion in real life**. 
+---
 
-![Interaction Matrix](images/motion.png)
+## 🛠 System Architecture
 
-**See my [notes package](Notes.pdf) notes for a simple, clever derivation!**
+### 1. Perception & State Estimation
+Using a ZED Mini camera, we detect ArUco markers to determine the human's relative position $[x, y, \theta]$.
+*   **Reference:** [ArUco Marker Tracking](https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html)
 
-# Results
+### 2. Kinematic Bicycle Model
+We treat the robot like a bicycle. This ensures the controller never asks the wheels to turn sharper than they physically can or "slide" sideways.
+*   **Key Constraints:** Steering angle ($\delta$) is limited to $\pm 25^\circ$.
+*   **Further Reading:** [The Kinematic Bicycle Model](https://www.shuffleai.blog/blog/Kinematic_Bicycle_Model.html)
 
+### 3. Optimization with CasADi
+We use the **CasADi** framework to translate our control problem into math that the **IPOPT** solver can understand. It minimizes a "cost function" that penalizes being too far from the human and using too much "jerk" in the steering.
+*   **Tool:** [CasADi Optimization Suite](https://web.casadi.org/)
 
-<table width="100%">
-  <tr>
-    <th>Image Base Visual Servoing</th>
-    <th>Test Run Plotted</th>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="images/servo.gif" alt="Image Based Visual Servoing" />
-    </td>
-    <td width="50%">
-      <img src="images/output.gif" alt="Plotting" />
-    </td>
-  </tr>
-</table>
+---
 
+## 📂 Documentation & Math
+For the deep-dives into the derivations and logic, refer to the `docs/` folder:
+- **[Derivation.pdf](docs/Derivation.pdf)**: The full LTV state-space derivation and linearization process.
+- **[Pseudocode.pdf](docs/Pseudocode.pdf)**: A step-by-step breakdown of the control loop.
+- **[Problem Statement.pdf](docs/Problem%20Statement.pdf)**: Detailed breakdown of the 4 challenges of human following.
 
-# Implementation
+---
 
-## Dependencies
-- ROS1 Noetic (Ubuntu 20.04)
-- Python 3 with 'numpy', 'opencv'
-- ZED SDK (for ZED Mini camera)
-- 'rosserial' (for interfacing microcontroller with ROS messages)
+## 🖼 Recommended Visuals for the README
+*   **MPC Horizon Plot**: A diagram showing the robot's current position and its "predicted" trajectory dots curving toward the human. (Check `docs/images/output.gif` for inspiration).
+*   **Bicycle Model Geometry**: An image showing the wheelbase ($L$) and steering angle ($\delta$) to clarify the "car-like" constraints.
+*   **Comparison Gif**: A side-by-side of the old PID "shaking" vs. the new MPC "smooth glide."
 
+---
 
+## 🚀 Quick Start
 ```bash
-# gaming controller/joystick and ROSserial dependencies
-sudo apt install ros-noetic-joy ros-noetic-rosserial-python
+# 1. Start the ROS environment and Vision
+roslaunch human_following_robot aruco.launch
 
-# clone and build
-git clone https://github.com/nodelabuofa/aruco-course-correction.git
-cd ..
-catkin_make
-source devel/setup.bash
-
-# Run visual servoing pipeline
-roslaunch aruco_course_correction aruco.launch
+# 2. Launch the MPC Controller
+python3 scripts/trajectory_planning_controller.py
 ```
 
-
-
-### Key Challenges
-
-Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
-
-![challenges](images/challenges.png)
-
-
-
+*Note: This project requires ROS Noetic and the CasADi python library.*
