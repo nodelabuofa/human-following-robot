@@ -1,4 +1,38 @@
-# Human-Following Robot: LTV-MPC Trajectory Planning
+# Trajectory Planning Controller
+
+**Goal**: shadow human, attempting to face them at fixed distance (0.2m)
+**Nutshell**: Plans a trajectory over multiple time steps, aware of motion constraints.
+**Significance**: Intelligent, behaviour tunable, robust.
+**Progress**: Developing for deployment
+
+
+# The Upgrade
+
+Visual error controller thought the car could jump left/right and go at Mach speed. This **predictive planner and controller** is actually aware of the car's kinematic model and control constraints.
+
+# Problem Statement  
+
+Looking under the hood, we're minimizing control effort and tracking error. Penalty tuning needed to balance lazy response with aggressive overshooting.
+
+More specifically, this is a Linear Model Predictive Controller. I linearize to simplify how sine/cosine/tangent vary nonlinearly.
+
+sequenceDiagram
+    participant T as Time (t)
+    participant P as Planner (Optimizer)
+    participant R as Robot (Hardware)
+    
+    Note over T,R: The Receding Horizon Loop
+    
+    T->>P: 1. Current State (x, y, v)
+    P->>P: 2. Predict next N steps<br/>(Minimize Cost J)
+    P->>R: 3. Execute ONLY 1st Step (u0)
+    R->>R: 4. Move (Physics happens)
+    R->>T: 5. New State (Error/Noise added)
+    
+    Note over T,R: Repeat loop at t+1
+
+
+
 
 This project implements an autonomous human-following system for a car-like robot. The core of this branch is the transition from a reactive **Visual Servoing** approach to a **Linear Time-Varying Model Predictive Controller (LTV-MPC)**, allowing for smoother, more natural motion that respects the physical constraints of the robot.
 
@@ -43,13 +77,6 @@ For the deep-dives into the derivations and logic, refer to the `docs/` folder:
 - **[Derivation.pdf](docs/Derivation.pdf)**: The full LTV state-space derivation and linearization process.
 - **[Pseudocode.pdf](docs/Pseudocode.pdf)**: A step-by-step breakdown of the control loop.
 - **[Problem Statement.pdf](docs/Problem%20Statement.pdf)**: Detailed breakdown of the 4 challenges of human following.
-
----
-
-## 🖼 Recommended Visuals for the README
-*   **MPC Horizon Plot**: A diagram showing the robot's current position and its "predicted" trajectory dots curving toward the human. (Check `docs/images/output.gif` for inspiration).
-*   **Bicycle Model Geometry**: An image showing the wheelbase ($L$) and steering angle ($\delta$) to clarify the "car-like" constraints.
-*   **Comparison Gif**: A side-by-side of the old PID "shaking" vs. the new MPC "smooth glide."
 
 ---
 
