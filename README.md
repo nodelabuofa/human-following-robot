@@ -49,7 +49,9 @@ See my [notes package](docs/Derivation.pdf) notes for a simple, clever derivatio
 
 # Implementation
 
-One ROS1 node estimates position to the ArUco/QR code, the other 
+One node estimates position to the ArUco/QR code, the other outputs the MPC's suggested next control action:
+
+![ROS Node](docs/images/ROS_node_network.png)
 
 
 
