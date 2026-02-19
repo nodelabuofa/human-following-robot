@@ -30,8 +30,8 @@ catkin_package(
 ## Install Python executables
 ## This makes sure scripts are executable and use correct Python interpreter
 catkin_install_python(PROGRAMS
-  scripts/aruco_corners_finder.py
-  scripts/visual_error_controller.py
+  scripts/aruco_pose_estimator.py
+  scripts/trajectory_planning_controller.py
   scripts/emergency_stop.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
