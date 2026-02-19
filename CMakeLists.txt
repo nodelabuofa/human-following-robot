@@ -8,17 +8,23 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   geometry_msgs
   std_msgs
+  sensor_msgs
+  cv_bridge
   message_generation
 )
+
+## This macro is needed to handle setup.py
+catkin_python_setup()
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
 )
 
 ## Declare a catkin package
 catkin_package(
-  CATKIN_DEPENDS rospy geometry_msgs std_msgs message_runtime
+  CATKIN_DEPENDS rospy geometry_msgs std_msgs sensor_msgs cv_bridge message_runtime
 )
 
 ## Install Python executables

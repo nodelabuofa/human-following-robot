@@ -13,9 +13,12 @@
   <depend>rospy</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
   
-  <!-- Python OpenCV (system dependency, use exec_depend) -->
+  <!-- Python OpenCV and NumPy (system dependency, use exec_depend) -->
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
   <build_depend>message_generation</build_depend>
 <exec_depend>message_runtime</exec_depend>
 
