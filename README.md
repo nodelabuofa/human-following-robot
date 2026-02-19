@@ -1,6 +1,12 @@
-# Problem Statement
+# Visual Error Controller
 
-Following a human is a useful skill for robots, but implementing this on small, low-cost platforms has 4 challenges:
+**Nutshell**: Simple, fast, but physically unrealistic
+**Goal**: Baseline feedback controller
+
+
+### Problem Statement
+
+Following a human is a useful skill for robots, but implementing a solution with reasonable latency on small, low-cost platforms has 4 challenges
 
 1. Finding the person; human appearance changes with orientation, distance and lighting.
 2. Locking onto them as they walk behind things and reappear
@@ -13,6 +19,8 @@ Following a human is a useful skill for robots, but implementing this on small, 
 3. **Use 'where they are' - 'where they should be' as the error, no mapping or depth needed!**
 
 ![Visual Servoing Diagram](docs/images/visual-servoing.png)
+
+This is called "Image Based Visual Servoing" ![Visual Servoing Paper](docs/visual_error_background_slides.pdf). It functions like a P controller, though I implement it as a PI controller to address steady-state error.
 
 # Background
 
@@ -66,9 +74,10 @@ roslaunch aruco_course_correction aruco.launch
 
 
 
-### Key Challenges
+# Key Limitations
 
-Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
+
+Works reasonably when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
 
 ![challenges](docs/images/challenges.png)
 
