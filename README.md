@@ -44,18 +44,26 @@ Imagine you're driving down a windy road in thick fog. You:
 
 # Background 
 
-This is called a Linear Time Varying Model Predictive Controller. We linearize as follows, to simplify the nonlinear variation of sine, cosine and tangent:
+This is called a Linear Time Varying Model Predictive Controller; we linearize to simplify the nonlinear variation of sine, cosine and tangent. Note, we input actual previous state and control values here to get numeric matrices.
 
 ![MPC Kinematic Model](docs/images/linearized_state_space_model.png)
 
-See my [notes package](docs/Derivation.pdf) notes for a simple, clever derivation!
+See my [notes package](docs/Derivation.pdf) notes for a full, simple, and I might even say clever derivation!
 
 
 # Implementation
 
+### ROS Node Network
+
 One node estimates position to the ArUco/QR code, the other outputs the MPC's suggested next control action:
 
 ![ROS Node](docs/images/ROS_node_network.png)
+
+### Pseudocode
+
+![Pseudocode](docs/images/MPC_pseudocode.png)
+
+See my [notes package](docs/Pseudocode.pdf) notes for the full pseudocode explaining this
 
 
 
