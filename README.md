@@ -21,7 +21,7 @@ Following a human is a useful skill for robots, but implementing a solution with
 
 ![Visual Servoing Diagram](docs/images/visual-servoing.png)
 
-This is called "Image Based Visual Servoing" [Visual Servoing Paper](docs/visual_error_background_slides.pdf). It functions like a P controller, though I implement it as a PI controller to address steady-state error.
+This is called [**Image Based Visual Servoing**](docs/visual_error_background_slides.pdf). It functions like a P controller, though I implement it as a PI controller to address steady-state error.
 
 # Background
 
