@@ -23,11 +23,11 @@ Following a human is a useful skill for robots, but implementing a solution with
 
 ### Analogy
 
-This is exactly how humans drive/function without depth-scanning laser eyes! I know where the lane divider should be, see where it is, and linearly adjust my steering and throttle accordingly. This is called  [**Image Based Visual Servoing**](docs/visual_error_background_slides.pdf). 
+This is exactly how humans drive/function without depth-scanning laser eyes! I know where the lane divider should be, see where it is, and linearly adjust my steering and throttle accordingly. 
 
 # Background
 
-The PID feedback controller **relates motion** of QR code's corners **in the video feed to the car's motion in real life**. 
+The PID feedback controller **relates motion** of QR code's corners **in the video feed to the car's motion in real life**. This is called  [**Image Based Visual Servoing**](docs/visual_error_background_slides.pdf). 
 
 ![Interaction Matrix](docs/images/motion.png)
 
