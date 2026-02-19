@@ -12,15 +12,15 @@ Following a human is a useful skill for robots, but implementing this on small, 
 1. Use QR/ArUco codes to find and track people instead
 3. **Use 'where they are' - 'where they should be' as the error, no mapping or depth needed!**
 
-![Visual Servoing Diagram](images/visual-servoing.png)
+![Visual Servoing Diagram](docs/images/visual-servoing.png)
 
 # Background
 
 The PID feedback controller **relates motion** of QR code's corners **in the video feed to the car's motion in real life**. 
 
-![Interaction Matrix](images/motion.png)
+![Interaction Matrix](docs/images/motion.png)
 
-**See my [notes package](Notes.pdf) notes for a simple, clever derivation!**
+**See my [notes package](docs/Notes.pdf) notes for a simple, clever derivation!**
 
 # Results
 
@@ -32,10 +32,10 @@ The PID feedback controller **relates motion** of QR code's corners **in the vid
   </tr>
   <tr>
     <td width="50%">
-      <img src="images/servo.gif" alt="Image Based Visual Servoing" />
+      <img src="docs/images/servo.gif" alt="Image Based Visual Servoing" />
     </td>
     <td width="50%">
-      <img src="images/output.gif" alt="Plotting" />
+      <img src="docs/images/output.gif" alt="Plotting" />
     </td>
   </tr>
 </table>
@@ -70,7 +70,7 @@ roslaunch aruco_course_correction aruco.launch
 
 Works well when QR code radially oriented, but struggles in scenarios needing maneouvring as controller **assumes car can 'drive sideways'**, and also **doesn't plan motion.**
 
-![challenges](images/challenges.png)
+![challenges](docs/images/challenges.png)
 
 
 
