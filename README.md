@@ -50,6 +50,12 @@ This is called a Linear Time Varying Model Predictive Controller; we linearize t
 
 See my [notes package](docs/Derivation.pdf) notes for a full, simple, and I might even say clever derivation!
 
+# Results
+
+I've made a simplified plotter so anyone can run this locally. Here's an example run:
+
+![MPC](docs/images/MPC_plot.png)
+
 
 # Implementation
 
