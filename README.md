@@ -1,6 +1,7 @@
 # Visual Error Controller
 
 **Nutshell**: Simple, fast, but physically unrealistic
+
 **Goal**: Baseline feedback controller
 
 
